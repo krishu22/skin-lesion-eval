@@ -1,0 +1,28 @@
+data_dir: /kaggle/input/datasets/kmader/skin-cancer-mnist-ham10000
+metadata_csv: HAM10000_metadata.csv
+image_dirs:
+  - HAM10000_images_part_1
+  - HAM10000_images_part_2
+
+classes: [nv, mel, bkl, bcc, akiec, vasc, df]
+
+split:
+  test_size: 0.20
+  val_size: 0.125
+  group_col: lesion_id
+  seed: 42
+
+image_size: 224
+
+augmentation:
+  random_crop_pad: 32
+  h_flip: true
+  rotation_degrees: 20
+  color_jitter:
+    brightness: 0.2
+    contrast: 0.2
+    saturation: 0.2
+
+normalize:
+  mean: [0.485, 0.456, 0.406]
+  std: [0.229, 0.224, 0.225]

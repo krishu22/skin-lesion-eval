@@ -1,0 +1,16 @@
+seed: 42
+batch_size: 32
+
+optimizer:
+  name: adamw
+  lr: 1e-4
+  weight_decay: 0.01
+
+scheduler:
+  name: cosine_warm_restarts
+  T_0: 10
+  T_mult: 2
+
+max_epochs: 100
+patience: 10
+metric_for_best: balanced_accuracy
