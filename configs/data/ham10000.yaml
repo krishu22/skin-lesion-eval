@@ -1,4 +1,4 @@
-data_dir: /kaggle/input/datasets/kmader/skin-cancer-mnist-ham10000
+data_dir: ham10000
 metadata_csv: HAM10000_metadata.csv
 image_dirs:
   - HAM10000_images_part_1
