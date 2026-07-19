@@ -12,7 +12,7 @@ split:
   group_col: lesion_id
   seed: 42
 
-image_size: 224
+image_size: 224 
 
 augmentation:
   random_crop_pad: 32
