@@ -1,3 +1,5 @@
 venv
 ham10000
 wandb
+*.pt
+*.pth
