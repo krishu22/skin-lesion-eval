@@ -2,6 +2,7 @@ import os
 import torch
 from sklearn.metrics import balanced_accuracy_score
 from tqdm.auto import tqdm
+from math import ceil
 
 import sys
 from pathlib import Path
@@ -21,14 +22,34 @@ def build_optimizer(model, optimizer_cfg):
     raise ValueError(f"Unknown optimizer name: '{name}'")
 
 
-def build_scheduler(optimizer, scheduler_cfg):
+def build_scheduler(optimizer, scheduler_cfg, steps_per_epoch=None):
     name = scheduler_cfg["name"]
     if name == "cosine_warm_restarts":
-        return torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
+        base_sched = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
             optimizer,
             T_0=scheduler_cfg["T_0"],
             T_mult=scheduler_cfg["T_mult"],
         )
+
+        # Optional linear warmup (specified in steps in config). If provided,
+        # convert warmup steps to whole epochs using steps_per_epoch and
+        # prepend a LambdaLR warmup using SequentialLR.
+        warmup_steps = scheduler_cfg.get("warmup_steps", 0)
+        if warmup_steps and steps_per_epoch:
+            warmup_epochs = ceil(warmup_steps / float(steps_per_epoch))
+            if warmup_epochs < 1:
+                warmup_epochs = 1
+
+            from torch.optim.lr_scheduler import LambdaLR, SequentialLR
+
+            def _warmup_lambda(epoch):
+                return float(epoch + 1) / float(warmup_epochs) if epoch < warmup_epochs else 1.0
+
+            warmup_sched = LambdaLR(optimizer, lr_lambda=_warmup_lambda)
+            return SequentialLR(optimizer, schedulers=[warmup_sched, base_sched], milestones=[warmup_epochs])
+
+        return base_sched
+
     raise ValueError(f"Unknown scheduler name: '{name}'")
 
 
@@ -68,7 +89,8 @@ def run_epoch(model, loader, criterion, optimizer, device, train_mode, epoch_num
 
 def train_model(model, train_loader, val_loader, criterion, train_cfg, device, checkpoint_path):
     optimizer = build_optimizer(model, train_cfg["optimizer"])
-    scheduler = build_scheduler(optimizer, train_cfg["scheduler"])
+    # provide steps per epoch so warmup_steps in config can be converted to epochs
+    scheduler = build_scheduler(optimizer, train_cfg["scheduler"], steps_per_epoch=len(train_loader))
 
     max_epochs = train_cfg["max_epochs"]
     patience = train_cfg["patience"]
