@@ -27,7 +27,7 @@ def main():
     args = parse_args()
     cfg = load_config(args.config)
 
-    set_seed(cfg["train"]["seed"])
+    set_seed(cfg["train"]["seed"], deterministic=cfg["train"].get("deterministic", False))
 
     train_df, val_df, test_df = get_lesion_level_splits(
         cfg["data"], save_dir=f"{cfg['output_dir']}/splits"
@@ -41,9 +41,9 @@ def main():
     test_ds = HAM10000Dataset(test_df, eval_transform)
 
     batch_size = cfg["train"]["batch_size"]
-    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True, num_workers=0, pin_memory=True)
-    val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False, num_workers=0, pin_memory=True)
-    test_loader = DataLoader(test_ds, batch_size=batch_size, shuffle=False, num_workers=0, pin_memory=True)
+    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True)
+    val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False, num_workers=4, pin_memory=True)
+    test_loader = DataLoader(test_ds, batch_size=batch_size, shuffle=False, num_workers=4, pin_memory=True)
 
     model = build_model(cfg["model"])
     device = get_device()
