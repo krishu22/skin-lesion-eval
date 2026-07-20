@@ -35,7 +35,17 @@ kaggle datasets download -d "$KAGGLE_DATASET" -p "$DATA_DIR"
 
 echo "Unzipping..."
 cd "$DATA_DIR"
-unzip -q ./*.zip
+if command -v unzip >/dev/null 2>&1; then
+    unzip -q ./*.zip
+else
+    python3 - <<'PY'
+import glob
+import zipfile
+for archive in glob.glob('*.zip'):
+    with zipfile.ZipFile(archive, 'r') as zf:
+        zf.extractall()
+PY
+fi
 rm -f ./*.zip
 cd ..
 
