@@ -15,13 +15,17 @@ split:
 image_size: 224 
 
 augmentation:
+  use_random_resized_crop: true
   random_crop_pad: 32
+  random_resized_crop_scale: [0.7, 1.0]
+  random_resized_crop_ratio: [0.9, 1.1]
   h_flip: true
-  rotation_degrees: 20
+  h_flip_prob: 0.5
+  rotation_degrees: 35
   color_jitter:
-    brightness: 0.2
-    contrast: 0.2
-    saturation: 0.2
+    brightness: 0.3
+    contrast: 0.3
+    saturation: 0.3
 
 normalize:
   mean: [0.485, 0.456, 0.406]
