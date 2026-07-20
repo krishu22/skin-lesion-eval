@@ -4,14 +4,18 @@ batch_size: 32
 
 optimizer:
   name: adamw
-  lr: 1.0e-4
-  weight_decay: 0.01
+  lr: 5.0e-5
+  weight_decay: 0.1
 
 scheduler:
   name: cosine_warm_restarts
   T_0: 10
   T_mult: 2
+  # linear warmup in steps (will be converted to epochs automatically)
+  warmup_steps: 500
 
 max_epochs: 100
-patience: 10
+# Patience should span at least one scheduler restart cycle; increased to avoid
+# early stopping right after a restart spike. Adjust as needed.
+patience: 20
 metric_for_best: balanced_accuracy
