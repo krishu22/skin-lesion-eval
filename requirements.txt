@@ -1,0 +1,12 @@
+torch==2.8.0
+torchvision==0.23.0
+timm==1.0.28
+wandb==0.26.1
+scikit-learn==1.6.1
+pandas==2.3.3
+numpy==2.0.2
+pillow==11.3.0
+tqdm==4.69.0
+PyYAML==6.0.3
+protobuf==6.33.6
+requests==2.32.5
