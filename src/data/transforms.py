@@ -6,24 +6,36 @@ def build_train_transform(data_cfg):
     aug = data_cfg["augmentation"]
     norm = data_cfg["normalize"]
 
-    resize_size = image_size + aug["random_crop_pad"]
+    transform_list = []
 
-    transform_list = [
-        transforms.Resize((resize_size, resize_size)),
-        transforms.RandomCrop(image_size),
-    ]
+    resize_size = image_size + aug.get("random_crop_pad", 32)
+    if aug.get("use_random_resized_crop", True):
+        scale = aug.get("random_resized_crop_scale", (0.7, 1.0))
+        ratio = aug.get("random_resized_crop_ratio", (0.9, 1.1))
+        transform_list.append(
+            transforms.RandomResizedCrop(image_size, scale=scale, ratio=ratio)
+        )
+    else:
+        transform_list.extend(
+            [
+                transforms.Resize((resize_size, resize_size)),
+                transforms.RandomCrop(image_size),
+            ]
+        )
 
-    if aug["h_flip"]:
-        transform_list.append(transforms.RandomHorizontalFlip())
+    if aug.get("h_flip", False):
+        transform_list.append(
+            transforms.RandomHorizontalFlip(p=aug.get("h_flip_prob", 0.5))
+        )
 
-    transform_list.append(transforms.RandomRotation(aug["rotation_degrees"]))
+    transform_list.append(transforms.RandomRotation(aug.get("rotation_degrees", 20)))
 
-    cj = aug["color_jitter"]
+    cj = aug.get("color_jitter", {})
     transform_list.append(
         transforms.ColorJitter(
-            brightness=cj["brightness"],
-            contrast=cj["contrast"],
-            saturation=cj["saturation"],
+            brightness=cj.get("brightness", 0.2),
+            contrast=cj.get("contrast", 0.2),
+            saturation=cj.get("saturation", 0.2),
         )
     )
 

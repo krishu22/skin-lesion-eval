@@ -1,6 +1,7 @@
 import sys
 from pathlib import Path
-sys.path.append(str(Path(__file__).resolve().parents[1]))
+
+sys.path.append(str(Path(__file__).resolve().parents[2]))
 
 from src.config import load_config
 from src.data.transforms import build_train_transform, build_eval_transform
