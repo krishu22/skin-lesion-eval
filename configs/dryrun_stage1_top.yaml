@@ -1,0 +1,11 @@
+defaults:
+  data: ham10000
+  model: swin
+  loss: ce
+  train: dryrun_stage1
+
+run_name: dryrun_stage1
+output_dir: outputs/dryrun_stage1
+
+wandb:
+  project: skin-lesion-classification
