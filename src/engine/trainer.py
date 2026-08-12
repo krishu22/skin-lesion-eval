@@ -22,33 +22,42 @@ def build_optimizer(model, optimizer_cfg):
     raise ValueError(f"Unknown optimizer name: '{name}'")
 
 
-def build_scheduler(optimizer, scheduler_cfg, steps_per_epoch=None):
+def _wrap_with_warmup(optimizer, base_sched, scheduler_cfg, steps_per_epoch):
+    # Optional linear warmup (specified in steps in config). If provided,
+    # convert warmup steps to whole epochs using steps_per_epoch and
+    # prepend a LambdaLR warmup using SequentialLR.
+    warmup_steps = scheduler_cfg.get("warmup_steps", 0)
+    if not (warmup_steps and steps_per_epoch):
+        return base_sched
+
+    warmup_epochs = max(1, ceil(warmup_steps / float(steps_per_epoch)))
+
+    from torch.optim.lr_scheduler import LambdaLR, SequentialLR
+
+    def _warmup_lambda(epoch):
+        return float(epoch + 1) / float(warmup_epochs) if epoch < warmup_epochs else 1.0
+
+    warmup_sched = LambdaLR(optimizer, lr_lambda=_warmup_lambda)
+    return SequentialLR(optimizer, schedulers=[warmup_sched, base_sched], milestones=[warmup_epochs])
+
+
+def build_scheduler(optimizer, scheduler_cfg, steps_per_epoch=None, max_epochs=None):
     name = scheduler_cfg["name"]
+
     if name == "cosine_warm_restarts":
         base_sched = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
             optimizer,
             T_0=scheduler_cfg["T_0"],
             T_mult=scheduler_cfg["T_mult"],
         )
+        return _wrap_with_warmup(optimizer, base_sched, scheduler_cfg, steps_per_epoch)
 
-        # Optional linear warmup (specified in steps in config). If provided,
-        # convert warmup steps to whole epochs using steps_per_epoch and
-        # prepend a LambdaLR warmup using SequentialLR.
-        warmup_steps = scheduler_cfg.get("warmup_steps", 0)
-        if warmup_steps and steps_per_epoch:
-            warmup_epochs = ceil(warmup_steps / float(steps_per_epoch))
-            if warmup_epochs < 1:
-                warmup_epochs = 1
-
-            from torch.optim.lr_scheduler import LambdaLR, SequentialLR
-
-            def _warmup_lambda(epoch):
-                return float(epoch + 1) / float(warmup_epochs) if epoch < warmup_epochs else 1.0
-
-            warmup_sched = LambdaLR(optimizer, lr_lambda=_warmup_lambda)
-            return SequentialLR(optimizer, schedulers=[warmup_sched, base_sched], milestones=[warmup_epochs])
-
-        return base_sched
+    if name == "cosine":
+        # Single smooth decay with no restarts — avoids the periodic LR-jump
+        # that cosine_warm_restarts causes, which can trip early stopping.
+        t_max = scheduler_cfg.get("T_max", max_epochs)
+        base_sched = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=t_max)
+        return _wrap_with_warmup(optimizer, base_sched, scheduler_cfg, steps_per_epoch)
 
     raise ValueError(f"Unknown scheduler name: '{name}'")
 
@@ -88,12 +97,14 @@ def run_epoch(model, loader, criterion, optimizer, device, train_mode, epoch_num
 
 
 def train_model(model, train_loader, val_loader, criterion, train_cfg, device, checkpoint_path):
-    optimizer = build_optimizer(model, train_cfg["optimizer"])
-    # provide steps per epoch so warmup_steps in config can be converted to epochs
-    scheduler = build_scheduler(optimizer, train_cfg["scheduler"], steps_per_epoch=len(train_loader))
-
     max_epochs = train_cfg["max_epochs"]
     patience = train_cfg["patience"]
+
+    optimizer = build_optimizer(model, train_cfg["optimizer"])
+    # provide steps per epoch so warmup_steps in config can be converted to epochs
+    scheduler = build_scheduler(
+        optimizer, train_cfg["scheduler"], steps_per_epoch=len(train_loader), max_epochs=max_epochs
+    )
 
     best_bal_acc = -1.0
     epochs_no_improve = 0
