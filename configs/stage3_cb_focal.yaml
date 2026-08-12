@@ -2,7 +2,7 @@ defaults:
   data: ham10000
   model: swin
   loss: cb_focal
-  train: stage1_baseline
+  train: stage3_cb_focal
 
 run_name: stage3_cb_focal_swin
 output_dir: outputs/stage3_cb_focal
