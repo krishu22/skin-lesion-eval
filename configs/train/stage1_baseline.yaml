@@ -5,7 +5,7 @@ batch_size: 32
 optimizer:
   name: adamw
   lr: 2.0e-5
-  weight_decay: 0.2
+  weight_decay: 0.3
 
 scheduler:
   name: cosine_warm_restarts
