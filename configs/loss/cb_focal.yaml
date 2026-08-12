@@ -1,0 +1,4 @@
+name: cb_focal
+params:
+  beta: 0.999
+  gamma: 2.0
