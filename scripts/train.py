@@ -47,7 +47,10 @@ def main():
 
     model = build_model(cfg["model"])
     device = get_device()
-    criterion = build_loss(cfg["loss"])
+
+    num_classes = cfg["model"]["num_classes"]
+    class_counts = [int((train_df["label"] == c).sum()) for c in range(num_classes)]
+    criterion = build_loss(cfg["loss"], class_counts=class_counts)
 
     checkpoint_path = f"{cfg['output_dir']}/checkpoints/best.pt"
     metrics_dir = f"{cfg['output_dir']}/metrics"
