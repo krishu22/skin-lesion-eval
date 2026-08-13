@@ -1,3 +1,4 @@
+import logging
 import os
 import torch
 from sklearn.metrics import balanced_accuracy_score, confusion_matrix
@@ -9,6 +10,9 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 from src.utils.logger import log
+from src.augment.mixup_cutmix import apply_batch_augmentation, mixup_cutmix_criterion
+
+logger = logging.getLogger(__name__)
 
 
 def build_optimizer(model, optimizer_cfg):
@@ -62,7 +66,8 @@ def build_scheduler(optimizer, scheduler_cfg, steps_per_epoch=None, max_epochs=N
     raise ValueError(f"Unknown scheduler name: '{name}'")
 
 
-def run_epoch(model, loader, criterion, optimizer, device, train_mode, epoch_num):
+def run_epoch(model, loader, criterion, optimizer, device, train_mode, epoch_num,
+              mixup_cfg=None, cutmix_cfg=None):
     model.train() if train_mode else model.eval()
     total_loss = 0.0
     all_preds, all_labels = [], []
@@ -71,14 +76,23 @@ def run_epoch(model, loader, criterion, optimizer, device, train_mode, epoch_num
     pbar = tqdm(loader, desc=desc, leave=False)
 
     with torch.set_grad_enabled(train_mode):
-        for imgs, labels in pbar:
+        for batch_idx, (imgs, labels) in enumerate(pbar):
             imgs, labels = imgs.to(device), labels.to(device)
 
             if train_mode:
                 optimizer.zero_grad()
+                imgs, targets_a, targets_b, lam, aug_mode = apply_batch_augmentation(
+                    imgs, labels, mixup_cfg, cutmix_cfg, device
+                )
+                logger.debug(
+                    "epoch=%d batch=%d augmentation=%s lam=%.4f",
+                    epoch_num, batch_idx, aug_mode, lam,
+                )
+            else:
+                targets_a, targets_b, lam = labels, labels, 1.0
 
             outputs = model(imgs)
-            loss = criterion(outputs, labels)
+            loss = mixup_cutmix_criterion(criterion, outputs, targets_a, targets_b, lam)
 
             if train_mode:
                 loss.backward()
@@ -118,9 +132,13 @@ def train_model(model, train_loader, val_loader, criterion, train_cfg, device, c
 
     os.makedirs(os.path.dirname(checkpoint_path), exist_ok=True)
 
+    mixup_cfg = train_cfg.get("mixup")
+    cutmix_cfg = train_cfg.get("cutmix")
+
     for epoch in range(1, max_epochs + 1):
         train_loss, train_bal_acc = run_epoch(
-            model, train_loader, criterion, optimizer, device, train_mode=True, epoch_num=epoch
+            model, train_loader, criterion, optimizer, device, train_mode=True, epoch_num=epoch,
+            mixup_cfg=mixup_cfg, cutmix_cfg=cutmix_cfg,
         )
         val_loss, val_bal_acc = run_epoch(
             model, val_loader, criterion, optimizer, device, train_mode=False, epoch_num=epoch

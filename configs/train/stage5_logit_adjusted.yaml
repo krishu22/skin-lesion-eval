@@ -17,3 +17,15 @@ max_epochs: 60
 # no periodic LR-jump to be mistaken for a plateau.
 patience: 10
 metric_for_best: balanced_accuracy
+
+# Batch-level MixUp/CutMix (train split only). At most one is ever applied per
+# batch, even if both are enabled — batch_prob is each one's share of batches.
+mixup:
+  enabled: false
+  alpha: 0.2
+  batch_prob: 0.3
+
+cutmix:
+  enabled: false
+  alpha: 1.0
+  batch_prob: 0.2
