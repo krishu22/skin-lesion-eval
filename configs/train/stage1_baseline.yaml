@@ -19,3 +19,15 @@ max_epochs: 100
 # early stopping right after a restart spike. Adjust as needed.
 patience: 20
 metric_for_best: balanced_accuracy
+
+# Batch-level MixUp/CutMix (train split only). At most one is ever applied per
+# batch, even if both are enabled — batch_prob is each one's share of batches.
+mixup:
+  enabled: false
+  alpha: 0.2
+  batch_prob: 0.3
+
+cutmix:
+  enabled: false
+  alpha: 1.0
+  batch_prob: 0.2
