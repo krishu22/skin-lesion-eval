@@ -16,6 +16,8 @@ split:
 
 image_size: 224
 
+dullrazor: false
+
 augmentation:
   use_random_resized_crop: true
   random_crop_pad: 32

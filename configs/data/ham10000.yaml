@@ -14,7 +14,9 @@ split:
   group_col: lesion_id
   seed: 42
 
-image_size: 224 
+image_size: 224
+
+dullrazor: false
 
 augmentation:
   use_random_resized_crop: true

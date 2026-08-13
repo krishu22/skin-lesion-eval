@@ -25,6 +25,7 @@ def build_model(model_cfg):
         model_cfg["name"],
         pretrained=model_cfg["pretrained"],
         num_classes=model_cfg["num_classes"],
+        drop_path_rate=model_cfg.get("drop_path_rate", 0.0),
     )
     model = _inject_dropout_head(model, model_cfg.get("dropout", 0.0))
     device = get_device()
