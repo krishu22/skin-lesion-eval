@@ -3,6 +3,7 @@ import torch.nn as nn
 
 from src.losses.focal import FocalLoss
 from src.losses.confusion_aware import ConfusionAwareCELoss
+from src.losses.logit_adjusted import LogitAdjustedCrossEntropy
 
 
 def _class_balanced_weights(class_counts, beta):
@@ -37,5 +38,10 @@ def build_loss(loss_cfg, class_counts=None):
         if class_counts is None:
             raise ValueError("confusion_aware_ce loss requires class_counts")
         return ConfusionAwareCELoss(num_classes=len(class_counts), **params)
+
+    if name == "logit_adjusted_ce":
+        if class_counts is None:
+            raise ValueError("logit_adjusted_ce loss requires class_counts")
+        return LogitAdjustedCrossEntropy(class_counts=class_counts, **params)
 
     raise ValueError(f"Unknown loss name: '{name}'")

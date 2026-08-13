@@ -1,0 +1,3 @@
+name: logit_adjusted_ce
+params:
+  tau: 1.0

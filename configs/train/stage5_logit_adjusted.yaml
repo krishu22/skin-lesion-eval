@@ -1,0 +1,19 @@
+seed: 42
+deterministic: true
+batch_size: 32
+
+optimizer:
+  name: adamw
+  lr: 2.0e-5
+  weight_decay: 0.3
+
+scheduler:
+  name: cosine
+  # linear warmup in steps (will be converted to epochs automatically)
+  warmup_steps: 500
+
+max_epochs: 60
+# Single smooth cosine decay (no restarts) pairs with this tight patience —
+# no periodic LR-jump to be mistaken for a plateau.
+patience: 10
+metric_for_best: balanced_accuracy
