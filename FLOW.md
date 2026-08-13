@@ -7,8 +7,8 @@ Purpose
 
 High-level flow
 ---------------
-1. Configuration: top-level config `configs/stage1_baseline.yaml` composes data, model, loss, and train settings.
-2. Data loading & splits: `src/data/splits.py` loads `ham10000/HAM10000_metadata.csv`, maps `dx` to class indices, and performs lesion-level GroupShuffleSplit to produce train/val/test (no lesion leakage).
+1. Configuration: top-level config (e.g. `configs/stage1_baseline.yaml`) composes data, model, loss, and train settings. The `data` default selects `configs/data/ham10000.yaml` (raw images, `use_segmented: false`) or `configs/data/ham10000_segmented.yaml` (lesion-segmented images from https://www.kaggle.com/datasets/krishu22/segmented-ham10000, `use_segmented: true`, downloaded to `ham10000_segmented/`). Everything downstream (splits, dataset, transforms) is unaffected by which one is selected — only `data_dir` differs, image folder names / filenames and the metadata CSV are identical.
+2. Data loading & splits: `src/data/splits.py` loads `<data_dir>/HAM10000_metadata.csv`, maps `dx` to class indices, and performs lesion-level GroupShuffleSplit to produce train/val/test (no lesion leakage).
 3. Transforms: `src/data/transforms.py`
    - Train: Resize -> RandomCrop (with pad) -> optional RandomHorizontalFlip -> RandomRotation -> ColorJitter -> ToTensor -> Normalize
    - Eval: Resize -> ToTensor -> Normalize
@@ -29,7 +29,7 @@ Key files
 ---------
 - `scripts/train.py` — main entrypoint
 - `runpod_setup.sh` — installs deps and logs into W&B (expects `WANDB_API_KEY` env var)
-- `scripts/download_dataset.sh` — downloads HAM10000 from Kaggle (requires `~/.kaggle/kaggle.json`)
+- `scripts/download_dataset.sh <config.yaml>` — downloads the dataset variant (raw or segmented) the given config selects, from Kaggle (requires `~/.kaggle/kaggle.json`)
 - `configs/` — configuration compositions (data, model, loss, train)
 - `src/` — code: data, models, engine, utils
 
@@ -48,11 +48,12 @@ Run instructions (pod / local)
 -----------------------------
 1. Install deps (repo contains `requirements.txt`) or run `bash runpod_setup.sh` (expects `WANDB_API_KEY` env var).
 2. Prepare Kaggle credentials: create `~/.kaggle/kaggle.json` with your Kaggle username/key and `chmod 600`.
-3. Download dataset:
-   - `bash scripts/download_dataset.sh`
-4. Train & evaluate (single command):
+3. Download the dataset variant selected by your config (pass the same config you'll train with — the script reads its `defaults.data` to decide raw vs. segmented and the target directory):
+   - `bash scripts/download_dataset.sh configs/stage1_baseline.yaml`
+4. Train & evaluate (single command), using the SAME config path used in step 3:
    - `python3 scripts/train.py --config configs/stage1_baseline.yaml`
    - This trains, saves best checkpoint to `outputs/.../checkpoints/best.pt`, then runs final evaluation and saves metrics CSVs.
+   - To use segmented images with logit-adjusted loss instead: `bash scripts/download_dataset.sh configs/stage6_segmented_logit_adjusted.yaml` then `python3 scripts/train.py --config configs/stage6_segmented_logit_adjusted.yaml`.
 
 Notes & recommendations
 -----------------------
