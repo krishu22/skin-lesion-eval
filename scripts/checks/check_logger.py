@@ -7,7 +7,7 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 from src.config import load_config
 from src.utils.logger import init_run, log, finish
 
-cfg = load_config("configs/stage1_baseline.yaml")
+cfg = load_config("configs/experiment.yaml")
 
 run = init_run(cfg)
 print("W&B run initialized:", run.name)

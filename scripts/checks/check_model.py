@@ -6,7 +6,7 @@ import torch
 from src.config import load_config
 from src.models.build import build_model, get_device
 
-cfg = load_config("configs/stage1_baseline.yaml")
+cfg = load_config("configs/experiment.yaml")
 
 model = build_model(cfg["model"])
 device = get_device()

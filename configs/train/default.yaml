@@ -20,6 +20,7 @@ metric_for_best: balanced_accuracy
 
 # Batch-level MixUp/CutMix (train split only). At most one is ever applied per
 # batch, even if both are enabled — batch_prob is each one's share of batches.
+# Override from the CLI, e.g. train.mixup.enabled=true train.mixup.alpha=0.4
 mixup:
   enabled: false
   alpha: 0.2

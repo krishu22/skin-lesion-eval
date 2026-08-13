@@ -8,18 +8,21 @@ optimizer:
   weight_decay: 0.3
 
 scheduler:
-  name: cosine
+  name: cosine_warm_restarts
+  T_0: 10
+  T_mult: 2
   # linear warmup in steps (will be converted to epochs automatically)
   warmup_steps: 500
 
-max_epochs: 60
-# Single smooth cosine decay (no restarts) pairs with this tight patience —
-# no periodic LR-jump to be mistaken for a plateau.
-patience: 10
+max_epochs: 100
+# Patience should span at least one scheduler restart cycle; increased to avoid
+# early stopping right after a restart spike. Adjust as needed.
+patience: 20
 metric_for_best: balanced_accuracy
 
 # Batch-level MixUp/CutMix (train split only). At most one is ever applied per
 # batch, even if both are enabled — batch_prob is each one's share of batches.
+# Override from the CLI, e.g. train.mixup.enabled=true train.mixup.alpha=0.4
 mixup:
   enabled: false
   alpha: 0.2

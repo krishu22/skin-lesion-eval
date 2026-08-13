@@ -7,7 +7,7 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 from src.config import load_config
 from src.losses.build import build_loss
 
-cfg = load_config("configs/stage1_baseline.yaml")
+cfg = load_config("configs/experiment.yaml")
 criterion = build_loss(cfg["loss"])
 
 print("Loss type:", type(criterion).__name__)

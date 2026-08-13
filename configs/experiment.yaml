@@ -1,0 +1,12 @@
+defaults:
+  data: ham10000
+  model: swin
+  loss: ce
+  train: default
+
+run_name: baseline
+output_dir: outputs/baseline
+
+wandb:
+  project: ham10000
+  tags: []

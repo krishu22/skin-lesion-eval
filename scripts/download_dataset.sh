@@ -1,23 +1,29 @@
 #!/bin/bash
 set -e
 
-CONFIG_PATH="${1:?Usage: bash scripts/download_dataset.sh <path-to-top-level-config.yaml>}"
+DATA_NAME="${1:-ham10000}"
+DATA_CONFIG="configs/data/${DATA_NAME}.yaml"
 
-# ---- STEP 0: read data_dir / use_segmented from the config's data sub-config ----
+if [ ! -f "$DATA_CONFIG" ]; then
+    echo "ERROR: no such data config '$DATA_CONFIG'."
+    echo "Usage: bash scripts/download_dataset.sh [ham10000|ham10000_segmented]"
+    exit 1
+fi
+
+# ---- STEP 0: read data_dir / use_segmented from the data config ----
 CONFIG_OUT=$(python3 -c "
 import yaml
-top = yaml.safe_load(open('$CONFIG_PATH'))
-data_cfg = yaml.safe_load(open(f\"configs/data/{top['defaults']['data']}.yaml\"))
+data_cfg = yaml.safe_load(open('$DATA_CONFIG'))
 print(data_cfg.get('use_segmented', False), data_cfg['data_dir'])
 ")
 read -r USE_SEGMENTED DATA_DIR <<< "$CONFIG_OUT"
 
 if [ "$USE_SEGMENTED" = "True" ]; then
     KAGGLE_DATASET="krishu22/ham10000-segmented-224"
-    echo "===== Segmented HAM10000 dataset download (config: $CONFIG_PATH) ====="
+    echo "===== Segmented HAM10000 dataset download (data: $DATA_NAME) ====="
 else
     KAGGLE_DATASET="kmader/skin-cancer-mnist-ham10000"
-    echo "===== HAM10000 dataset download (config: $CONFIG_PATH) ====="
+    echo "===== HAM10000 dataset download (data: $DATA_NAME) ====="
 fi
 
 # ---- STEP 1: check Kaggle credentials exist ----

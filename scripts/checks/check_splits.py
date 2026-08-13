@@ -5,9 +5,9 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 from src.config import load_config
 from src.data.splits import get_lesion_level_splits
 
-cfg = load_config("configs/stage1_baseline.yaml")
+cfg = load_config("configs/experiment.yaml")
 train_df, val_df, test_df = get_lesion_level_splits(
-    cfg["data"], save_dir="outputs/stage1_baseline/splits"
+    cfg["data"], save_dir="outputs/baseline_smoke_test/splits"
 )
 
 group_col = cfg["data"]["split"]["group_col"]
