@@ -1,3 +1,4 @@
+import json
 import os
 import pandas as pd
 from sklearn.model_selection import GroupShuffleSplit
@@ -64,22 +65,40 @@ def get_lesion_level_splits(data_cfg, save_dir=None):
     Returns train_df, val_df, test_df split at the lesion level.
     If save_dir is given and splits already exist there, loads them
     from disk instead of recomputing — so every run uses the exact
-    same split.
+    same split. The cache is keyed on the resolved image count, so a
+    download that was incomplete when the cache was first written
+    won't silently poison later runs once the dataset is complete.
     """
+    meta = _load_metadata(data_cfg)
+    group_col = data_cfg["split"]["group_col"]
+
     if save_dir is not None:
         train_path = os.path.join(save_dir, "train.csv")
         val_path = os.path.join(save_dir, "val.csv")
         test_path = os.path.join(save_dir, "test.csv")
+        manifest_path = os.path.join(save_dir, "manifest.json")
 
         if os.path.exists(train_path) and os.path.exists(val_path) and os.path.exists(test_path):
-            print(f"Loading existing splits from {save_dir}")
             train_df = pd.read_csv(train_path)
             val_df = pd.read_csv(val_path)
             test_df = pd.read_csv(test_path)
-            return train_df, val_df, test_df
+            cached_count = len(train_df) + len(val_df) + len(test_df)
 
-    meta = _load_metadata(data_cfg)
-    group_col = data_cfg["split"]["group_col"]
+            if os.path.exists(manifest_path):
+                with open(manifest_path) as f:
+                    expected_count = json.load(f)["resolved_image_count"]
+            else:
+                expected_count = cached_count  # pre-existing cache with no manifest — trust it once
+
+            if cached_count == expected_count == len(meta):
+                print(f"Loading existing splits from {save_dir}")
+                return train_df, val_df, test_df
+
+            raise RuntimeError(
+                f"Cached splits at {save_dir} were computed from {expected_count} resolved images, "
+                f"but the dataset currently resolves {len(meta)}. This usually means the cache was "
+                f"written from an incomplete download. Delete {save_dir} and rerun to recompute."
+            )
 
     train_lesions, val_lesions, test_lesions = _split_lesions(meta, data_cfg["split"])
 
@@ -97,6 +116,8 @@ def get_lesion_level_splits(data_cfg, save_dir=None):
         train_df.to_csv(os.path.join(save_dir, "train.csv"), index=False)
         val_df.to_csv(os.path.join(save_dir, "val.csv"), index=False)
         test_df.to_csv(os.path.join(save_dir, "test.csv"), index=False)
+        with open(os.path.join(save_dir, "manifest.json"), "w") as f:
+            json.dump({"resolved_image_count": len(meta)}, f)
         print(f"Saved splits to {save_dir}")
 
     return train_df, val_df, test_df
