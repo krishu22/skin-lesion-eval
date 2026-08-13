@@ -7,7 +7,7 @@ Purpose
 
 High-level flow
 ---------------
-1. Configuration: top-level config (e.g. `configs/stage1_baseline.yaml`) composes data, model, loss, and train settings. The `data` default selects `configs/data/ham10000.yaml` (raw images, `use_segmented: false`) or `configs/data/ham10000_segmented.yaml` (lesion-segmented images from https://www.kaggle.com/datasets/krishu22/segmented-ham10000, `use_segmented: true`, downloaded to `ham10000_segmented/`). Everything downstream (splits, dataset, transforms) is unaffected by which one is selected — only `data_dir` differs, image folder names / filenames and the metadata CSV are identical.
+1. Configuration: top-level config (e.g. `configs/stage1_baseline.yaml`) composes data, model, loss, and train settings. The `data` default selects `configs/data/ham10000.yaml` (raw images, `use_segmented: false`) or `configs/data/ham10000_segmented.yaml` (lesion-segmented images from https://www.kaggle.com/datasets/krishu22/ham10000-segmented-224, `use_segmented: true`, downloaded to `ham10000_segmented/`; that dataset bundles its own `HAM10000_metadata.csv` alongside `HAM10000_images_part_1`/`part_2`, so no cross-dataset metadata fetch is needed). Everything downstream (splits, dataset, transforms) is unaffected by which one is selected — only `data_dir` differs, image folder names / filenames and the metadata CSV are identical.
 2. Data loading & splits: `src/data/splits.py` loads `<data_dir>/HAM10000_metadata.csv`, maps `dx` to class indices, and performs lesion-level GroupShuffleSplit to produce train/val/test (no lesion leakage).
 3. Transforms: `src/data/transforms.py`
    - Train: Resize -> RandomCrop (with pad) -> optional RandomHorizontalFlip -> RandomRotation -> ColorJitter -> ToTensor -> Normalize
