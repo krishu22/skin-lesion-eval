@@ -7,7 +7,7 @@ from src.config import load_config
 from src.data.transforms import build_train_transform, build_eval_transform
 from PIL import Image
 
-cfg = load_config("configs/stage1_baseline.yaml")
+cfg = load_config("configs/experiment.yaml")
 train_t = build_train_transform(cfg["data"])
 eval_t = build_eval_transform(cfg["data"])
 

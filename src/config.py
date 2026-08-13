@@ -1,5 +1,6 @@
 import os
 import yaml
+from omegaconf import OmegaConf
 
 # Maps each key in the top-level "defaults" block to the folder
 # where that category's yaml files live.
@@ -38,14 +39,39 @@ def _validate_config(cfg):
         )
 
 
-def load_config(top_level_path):
+def _split_overrides(overrides):
+    """Split CLI overrides into (category switches, dotlist overrides).
+
+    A category switch is a bare key matching one of CATEGORY_TO_FOLDER
+    (e.g. "loss=focal") — it swaps which sub-config file gets loaded for
+    that category. Everything else (e.g. "train.mixup.enabled=true",
+    "run_name=foo") is a regular nested dotlist override applied after
+    composition.
+    """
+    category_switches = {}
+    dotlist = []
+    for override in overrides:
+        key, sep, value = override.partition("=")
+        if sep and key in CATEGORY_TO_FOLDER and "." not in key:
+            category_switches[key] = value
+        else:
+            dotlist.append(override)
+    return category_switches, dotlist
+
+
+def load_config(top_level_path, overrides=None):
+    overrides = overrides or []
+    category_switches, dotlist = _split_overrides(overrides)
+
     top_level = _load_yaml(top_level_path)
 
     cfg = {}
 
     # Resolve each entry in "defaults" (e.g. data: ham10000)
-    # into the actual contents of configs/data/ham10000.yaml
-    defaults = top_level.get("defaults", {})
+    # into the actual contents of configs/data/ham10000.yaml, applying any
+    # CLI category switches (e.g. loss=focal) before resolving.
+    defaults = dict(top_level.get("defaults", {}))
+    defaults.update(category_switches)
     for category, name in defaults.items():
         folder = CATEGORY_TO_FOLDER[category]
         sub_config_path = os.path.join(folder, f"{name}.yaml")
@@ -56,6 +82,10 @@ def load_config(top_level_path):
     for key, value in top_level.items():
         if key != "defaults":
             cfg[key] = value
+
+    if dotlist:
+        merged = OmegaConf.merge(OmegaConf.create(cfg), OmegaConf.from_dotlist(dotlist))
+        cfg = OmegaConf.to_container(merged, resolve=True)
 
     _validate_config(cfg)
     return cfg

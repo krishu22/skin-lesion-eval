@@ -9,7 +9,7 @@ import pandas as pd
 
 from src.config import load_config
 
-CONFIG_PATH = sys.argv[1] if len(sys.argv) > 1 else "configs/stage6_segmented_logit_adjusted.yaml"
+CONFIG_PATH = sys.argv[1] if len(sys.argv) > 1 else "configs/experiment.yaml"
 
 cfg = load_config(CONFIG_PATH)
 data_cfg = cfg["data"]

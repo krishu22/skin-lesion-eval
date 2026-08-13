@@ -14,10 +14,10 @@ from src.losses.build import build_loss
 from src.engine.trainer import train_model
 from src.utils.logger import init_run, finish
 
-cfg = load_config("configs/stage1_baseline.yaml")
+cfg = load_config("configs/experiment.yaml")
 
 train_df, val_df, test_df = get_lesion_level_splits(
-    cfg["data"], save_dir="outputs/stage1_baseline/splits"
+    cfg["data"], save_dir="outputs/baseline_smoke_test/splits"
 )
 
 train_ds = HAM10000Dataset(train_df, build_train_transform(cfg["data"]))
@@ -41,7 +41,7 @@ cfg["train"]["patience"] = 2
 init_run(cfg)
 best_bal_acc = train_model(
     model, train_loader, val_loader, criterion, cfg["train"], device,
-    checkpoint_path="outputs/stage1_baseline/checkpoints/smoke_test.pt"
+    checkpoint_path="outputs/baseline_smoke_test/checkpoints/smoke_test.pt"
 )
 finish()
 

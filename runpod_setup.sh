@@ -25,4 +25,4 @@ python3 -m wandb login "$WANDB_API_KEY"
 # ---- STEP 4: confirm PyTorch sees the GPU ----
 python3 -c "import torch; print('CUDA available:', torch.cuda.is_available()); print('Device:', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'none')"
 
-echo "===== Setup complete. Run scripts/download_dataset.sh <config> next, then scripts/train.py ====="
+echo "===== Setup complete. Run scripts/download_dataset.sh [ham10000|ham10000_segmented] next, then scripts/train.py ====="

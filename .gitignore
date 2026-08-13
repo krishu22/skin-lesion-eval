@@ -5,3 +5,5 @@ wandb
 *.pt
 *.pth
 kaggle.json
+__pycache__/
+*.pyc

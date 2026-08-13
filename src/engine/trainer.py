@@ -1,7 +1,7 @@
 import logging
 import os
 import torch
-from sklearn.metrics import balanced_accuracy_score, confusion_matrix
+from sklearn.metrics import balanced_accuracy_score, f1_score, confusion_matrix
 from tqdm.auto import tqdm
 from math import ceil
 
@@ -13,6 +13,12 @@ from src.utils.logger import log
 from src.augment.mixup_cutmix import apply_batch_augmentation, mixup_cutmix_criterion
 
 logger = logging.getLogger(__name__)
+
+# Maps train.metric_for_best config values to the key run_epoch reports them under.
+METRIC_FOR_BEST_TO_KEY = {
+    "balanced_accuracy": "bal_acc",
+    "macro_f1": "macro_f1",
+}
 
 
 def build_optimizer(model, optimizer_cfg):
@@ -107,6 +113,7 @@ def run_epoch(model, loader, criterion, optimizer, device, train_mode, epoch_num
 
     avg_loss = total_loss / len(loader.dataset)
     bal_acc = balanced_accuracy_score(all_labels, all_preds)
+    macro_f1 = f1_score(all_labels, all_preds, average="macro")
 
     # Confusion-aware losses rebuild their cost matrix from the latest
     # validation confusion matrix so next epoch's training reflects it.
@@ -114,12 +121,15 @@ def run_epoch(model, loader, criterion, optimizer, device, train_mode, epoch_num
         cm = confusion_matrix(all_labels, all_preds, labels=range(criterion.num_classes))
         criterion.update_from_confusion_matrix(cm)
 
-    return avg_loss, bal_acc
+    return {"loss": avg_loss, "bal_acc": bal_acc, "macro_f1": macro_f1}
 
 
 def train_model(model, train_loader, val_loader, criterion, train_cfg, device, checkpoint_path):
     max_epochs = train_cfg["max_epochs"]
     patience = train_cfg["patience"]
+
+    metric_for_best = train_cfg.get("metric_for_best", "balanced_accuracy")
+    metric_key = METRIC_FOR_BEST_TO_KEY[metric_for_best]
 
     optimizer = build_optimizer(model, train_cfg["optimizer"])
     # provide steps per epoch so warmup_steps in config can be converted to epochs
@@ -127,7 +137,7 @@ def train_model(model, train_loader, val_loader, criterion, train_cfg, device, c
         optimizer, train_cfg["scheduler"], steps_per_epoch=len(train_loader), max_epochs=max_epochs
     )
 
-    best_bal_acc = -1.0
+    best_metric = -1.0
     epochs_no_improve = 0
 
     os.makedirs(os.path.dirname(checkpoint_path), exist_ok=True)
@@ -136,11 +146,11 @@ def train_model(model, train_loader, val_loader, criterion, train_cfg, device, c
     cutmix_cfg = train_cfg.get("cutmix")
 
     for epoch in range(1, max_epochs + 1):
-        train_loss, train_bal_acc = run_epoch(
+        train_metrics = run_epoch(
             model, train_loader, criterion, optimizer, device, train_mode=True, epoch_num=epoch,
             mixup_cfg=mixup_cfg, cutmix_cfg=cutmix_cfg,
         )
-        val_loss, val_bal_acc = run_epoch(
+        val_metrics = run_epoch(
             model, val_loader, criterion, optimizer, device, train_mode=False, epoch_num=epoch
         )
         scheduler.step()
@@ -148,25 +158,29 @@ def train_model(model, train_loader, val_loader, criterion, train_cfg, device, c
         current_lr = optimizer.param_groups[0]["lr"]
         log({
             "epoch": epoch,
-            "train_loss": train_loss,
-            "train_bal_acc": train_bal_acc,
-            "val_loss": val_loss,
-            "val_bal_acc": val_bal_acc,
+            "train_loss": train_metrics["loss"],
+            "train_bal_acc": train_metrics["bal_acc"],
+            "train_macro_f1": train_metrics["macro_f1"],
+            "val_loss": val_metrics["loss"],
+            "val_bal_acc": val_metrics["bal_acc"],
+            "val_macro_f1": val_metrics["macro_f1"],
             "lr": current_lr,
         }, step=epoch)
 
-        print(f"Epoch {epoch:03d} | train_loss={train_loss:.4f} train_bal_acc={train_bal_acc:.4f} "
-              f"| val_loss={val_loss:.4f} val_bal_acc={val_bal_acc:.4f}")
+        print(f"Epoch {epoch:03d} | train_loss={train_metrics['loss']:.4f} train_bal_acc={train_metrics['bal_acc']:.4f} "
+              f"| val_loss={val_metrics['loss']:.4f} val_bal_acc={val_metrics['bal_acc']:.4f} "
+              f"val_macro_f1={val_metrics['macro_f1']:.4f}")
 
-        if val_bal_acc > best_bal_acc:
-            best_bal_acc = val_bal_acc
+        val_metric = val_metrics[metric_key]
+        if val_metric > best_metric:
+            best_metric = val_metric
             epochs_no_improve = 0
             torch.save(model.state_dict(), checkpoint_path)
-            print(f"  -> New best val balanced accuracy: {best_bal_acc:.4f} (checkpoint saved)")
+            print(f"  -> New best val {metric_for_best}: {best_metric:.4f} (checkpoint saved)")
         else:
             epochs_no_improve += 1
             if epochs_no_improve >= patience:
                 print(f"Early stopping triggered at epoch {epoch} (no improvement for {patience} epochs).")
                 break
 
-    return best_bal_acc
+    return best_metric

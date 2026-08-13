@@ -20,12 +20,17 @@ from src.utils.logger import init_run, finish
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=str, required=True, help="Path to top-level yaml config")
+    parser.add_argument(
+        "overrides",
+        nargs="*",
+        help="Dotlist overrides, e.g. loss=focal train.mixup.enabled=true run_name=my_run",
+    )
     return parser.parse_args()
 
 
 def main():
     args = parse_args()
-    cfg = load_config(args.config)
+    cfg = load_config(args.config, overrides=args.overrides)
 
     set_seed(cfg["train"]["seed"], deterministic=cfg["train"].get("deterministic", False))
 
@@ -57,11 +62,12 @@ def main():
 
     init_run(cfg)
 
+    metric_for_best = cfg["train"].get("metric_for_best", "balanced_accuracy")
     print(f"\nStarting training on device: {device}\n")
-    best_val_bal_acc = train_model(
+    best_metric = train_model(
         model, train_loader, val_loader, criterion, cfg["train"], device, checkpoint_path
     )
-    print(f"\nTraining complete. Best val balanced accuracy: {best_val_bal_acc:.4f}")
+    print(f"\nTraining complete. Best val {metric_for_best}: {best_metric:.4f}")
 
     print("\nRunning final evaluation on test set...\n")
     test_summary = evaluate_model(
