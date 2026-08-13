@@ -1,5 +1,6 @@
 venv
 ham10000
+ham10000_segmented
 wandb
 *.pt
 *.pth

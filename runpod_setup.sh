@@ -22,16 +22,7 @@ fi
 echo "Logging into W&B using WANDB_API_KEY env var..."
 python3 -m wandb login "$WANDB_API_KEY"
 
-# ---- STEP 4: verify dataset is present ----
-DATA_DIR="ham10000"  # adjust if your RunPod dataset path differs
-if [ -d "$DATA_DIR" ]; then
-    echo "Dataset found at $DATA_DIR"
-else
-    echo "WARNING: Dataset not found at $DATA_DIR — download it before training."
-    echo "(See kaggle download script if you haven't fetched the dataset on this pod yet.)"
-fi
-
-# ---- STEP 5: confirm PyTorch sees the GPU ----
+# ---- STEP 4: confirm PyTorch sees the GPU ----
 python3 -c "import torch; print('CUDA available:', torch.cuda.is_available()); print('Device:', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'none')"
 
-echo "===== Setup complete. Ready to run scripts/train.py ====="
+echo "===== Setup complete. Run scripts/download_dataset.sh <config> next, then scripts/train.py ====="

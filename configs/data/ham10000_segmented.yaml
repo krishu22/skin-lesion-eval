@@ -1,6 +1,6 @@
-use_segmented: false
+use_segmented: true
 
-data_dir: ham10000
+data_dir: ham10000_segmented
 metadata_csv: HAM10000_metadata.csv
 image_dirs:
   - HAM10000_images_part_1
@@ -14,7 +14,7 @@ split:
   group_col: lesion_id
   seed: 42
 
-image_size: 224 
+image_size: 224
 
 augmentation:
   use_random_resized_crop: true
