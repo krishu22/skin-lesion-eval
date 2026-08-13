@@ -4,3 +4,4 @@ ham10000_segmented
 wandb
 *.pt
 *.pth
+kaggle.json
