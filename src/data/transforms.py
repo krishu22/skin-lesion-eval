@@ -1,5 +1,7 @@
 from torchvision import transforms
 
+from src.data.hair_removal import DullRazor
+
 
 def build_train_transform(data_cfg):
     image_size = data_cfg["image_size"]
@@ -7,6 +9,9 @@ def build_train_transform(data_cfg):
     norm = data_cfg["normalize"]
 
     transform_list = []
+
+    if data_cfg.get("dullrazor", False):
+        transform_list.append(DullRazor())
 
     resize_size = image_size + aug.get("random_crop_pad", 32)
     if aug.get("use_random_resized_crop", True):
@@ -61,8 +66,15 @@ def build_eval_transform(data_cfg):
     image_size = data_cfg["image_size"]
     norm = data_cfg["normalize"]
 
-    return transforms.Compose([
+    transform_list = []
+
+    if data_cfg.get("dullrazor", False):
+        transform_list.append(DullRazor())
+
+    transform_list.extend([
         transforms.Resize((image_size, image_size)),
         transforms.ToTensor(),
         transforms.Normalize(mean=norm["mean"], std=norm["std"]),
     ])
+
+    return transforms.Compose(transform_list)
