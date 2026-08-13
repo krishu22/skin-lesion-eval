@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 
 from src.losses.focal import FocalLoss
+from src.losses.confusion_aware import ConfusionAwareCELoss
 
 
 def _class_balanced_weights(class_counts, beta):
@@ -31,5 +32,10 @@ def build_loss(loss_cfg, class_counts=None):
         beta = params.pop("beta", 0.999)
         weights = _class_balanced_weights(class_counts, beta)
         return FocalLoss(alpha=weights, **params)
+
+    if name == "confusion_aware_ce":
+        if class_counts is None:
+            raise ValueError("confusion_aware_ce loss requires class_counts")
+        return ConfusionAwareCELoss(num_classes=len(class_counts), **params)
 
     raise ValueError(f"Unknown loss name: '{name}'")

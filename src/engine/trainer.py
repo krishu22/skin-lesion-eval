@@ -1,6 +1,6 @@
 import os
 import torch
-from sklearn.metrics import balanced_accuracy_score
+from sklearn.metrics import balanced_accuracy_score, confusion_matrix
 from tqdm.auto import tqdm
 from math import ceil
 
@@ -93,6 +93,13 @@ def run_epoch(model, loader, criterion, optimizer, device, train_mode, epoch_num
 
     avg_loss = total_loss / len(loader.dataset)
     bal_acc = balanced_accuracy_score(all_labels, all_preds)
+
+    # Confusion-aware losses rebuild their cost matrix from the latest
+    # validation confusion matrix so next epoch's training reflects it.
+    if not train_mode and hasattr(criterion, "update_from_confusion_matrix"):
+        cm = confusion_matrix(all_labels, all_preds, labels=range(criterion.num_classes))
+        criterion.update_from_confusion_matrix(cm)
+
     return avg_loss, bal_acc
 
 

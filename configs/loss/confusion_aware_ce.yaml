@@ -1,0 +1,4 @@
+name: confusion_aware_ce
+params:
+  lam: 1.0
+  eps: 1.0e-6
