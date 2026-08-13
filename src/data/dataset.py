@@ -1,5 +1,10 @@
+import warnings
 from torch.utils.data import Dataset
 from PIL import Image
+
+# Some HAM10000 JPEGs have malformed EXIF metadata; PIL prints a UserWarning
+# to stderr per image on load, which breaks tqdm's in-place progress bar.
+warnings.filterwarnings("ignore", message="Corrupt EXIF data*", category=UserWarning)
 
 
 class HAM10000Dataset(Dataset):

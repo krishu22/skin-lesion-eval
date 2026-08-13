@@ -1,0 +1,12 @@
+defaults:
+  data: ham10000
+  model: swin
+  loss: confusion_aware_ce
+  train: stage4_confusion_aware
+
+run_name: stage4_confusion_aware_swin
+output_dir: outputs/stage4_confusion_aware
+
+wandb:
+  project: ham10000
+  tags: [stage4, confusion_aware_ce]
