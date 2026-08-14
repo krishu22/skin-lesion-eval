@@ -7,6 +7,11 @@ defaults:
 run_name: baseline
 output_dir: outputs/baseline
 
+# Shared across every run/ablation so all of them train/eval on the exact
+# same lesion-level split, regardless of output_dir. Computed once, then
+# reloaded from cache on every subsequent run.
+splits_dir: outputs/splits
+
 wandb:
   project: ham10000
   tags: []
