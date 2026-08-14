@@ -72,14 +72,29 @@ different combination on a RunPod terminal.
 | `train.cutmix.batch_prob=` | float | fraction of batches CutMix is applied to |
 | `train.metric_for_best=` | `balanced_accuracy` \| `macro_f1` | metric used for early stopping / checkpoint selection |
 | `run_name=` | string | **set this every run** — used for W&B run naming |
-| `output_dir=` | path | **set this every run** — where splits/checkpoints/metrics are written |
+| `output_dir=` | path | **set this every run** — where checkpoints/metrics are written |
+| `splits_dir=` | path | shared lesion-level train/val/test split cache (see below); leave at its default unless you deliberately want a different split |
 
 At most one of MixUp/CutMix is ever applied to a given batch even if both are enabled;
 `batch_prob` is each one's share of batches.
 
 > **Always pass a unique `run_name=` and `output_dir=` per ablation.** They default to
-> `baseline` / `outputs/baseline` — reusing them across runs will silently reuse the cached
-> train/val/test split and overwrite the previous run's checkpoint and metrics.
+> `baseline` / `outputs/baseline` — reusing them across runs will overwrite the previous run's
+> checkpoint and metrics.
+
+### The shared train/val/test split
+
+`splits_dir` (default `outputs/splits`) is intentionally **separate** from `output_dir`. The
+lesion-level split is computed once on the first run and cached there as
+`train.csv`/`val.csv`/`test.csv` + `manifest.json`; every subsequent run — regardless of
+`run_name`/`output_dir`, and regardless of `data=ham10000` vs. `data=ham10000_segmented` —
+loads that same cached split instead of recomputing a new random one. This is what makes
+ablations comparable: every combination of dullrazor/mixup/cutmix/loss trains and evaluates on
+the exact same images. `outputs/splits/` is checked into git for this reason (everything else
+under `outputs/` is per-run and gitignored). Only pass `splits_dir=` to something else if you
+deliberately want a different split (e.g. a different `test_size`/seed) — and note that changing
+`configs/data/*.yaml`'s `split:` block has no effect once a cached split already exists at
+`splits_dir`; delete the cache directory first to force a recompute.
 
 ### Example ablation commands
 
@@ -123,7 +138,7 @@ python3 scripts/train.py --config configs/experiment.yaml \
    (see `src/config.py`); CLI overrides are merged in on top via OmegaConf.
 2. **Splits**: `src/data/splits.py` loads `<data_dir>/HAM10000_metadata.csv`, maps `dx` to class
    indices, and performs lesion-level `GroupShuffleSplit` (no lesion leakage across
-   train/val/test). Cached under `<output_dir>/splits/`.
+   train/val/test). Cached under `splits_dir` (shared across every run — see above).
 3. **Transforms**: `src/data/transforms.py` — optional DullRazor, then RandomResizedCrop /
    flips / rotation / color jitter / random erasing (train only), then normalize.
 4. **Model**: `src/models/build.py` builds a `timm` model per `configs/model/swin.yaml`.

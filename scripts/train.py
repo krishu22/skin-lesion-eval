@@ -35,7 +35,7 @@ def main():
     set_seed(cfg["train"]["seed"], deterministic=cfg["train"].get("deterministic", False))
 
     train_df, val_df, test_df = get_lesion_level_splits(
-        cfg["data"], save_dir=f"{cfg['output_dir']}/splits"
+        cfg["data"], save_dir=cfg["splits_dir"]
     )
 
     train_transform = build_train_transform(cfg["data"])

@@ -64,10 +64,14 @@ def get_lesion_level_splits(data_cfg, save_dir=None):
     """
     Returns train_df, val_df, test_df split at the lesion level.
     If save_dir is given and splits already exist there, loads them
-    from disk instead of recomputing — so every run uses the exact
-    same split. The cache is keyed on the resolved image count, so a
-    download that was incomplete when the cache was first written
-    won't silently poison later runs once the dataset is complete.
+    from disk instead of recomputing — so every run (including every
+    ablation, whether raw or segmented data) trains/evals on the exact
+    same split. The cache stores only image identity (not filepath), and
+    `filepath` is always re-resolved against the current data_cfg — so the
+    same cached split is safely reusable across raw vs. segmented data_dirs.
+    The cache is keyed on the resolved image count, so a download that was
+    incomplete when the cache was first written won't silently poison later
+    runs once the dataset is complete.
     """
     meta = _load_metadata(data_cfg)
     group_col = data_cfg["split"]["group_col"]
@@ -79,10 +83,10 @@ def get_lesion_level_splits(data_cfg, save_dir=None):
         manifest_path = os.path.join(save_dir, "manifest.json")
 
         if os.path.exists(train_path) and os.path.exists(val_path) and os.path.exists(test_path):
-            train_df = pd.read_csv(train_path)
-            val_df = pd.read_csv(val_path)
-            test_df = pd.read_csv(test_path)
-            cached_count = len(train_df) + len(val_df) + len(test_df)
+            cached_train_ids = pd.read_csv(train_path)["image_id"]
+            cached_val_ids = pd.read_csv(val_path)["image_id"]
+            cached_test_ids = pd.read_csv(test_path)["image_id"]
+            cached_count = len(cached_train_ids) + len(cached_val_ids) + len(cached_test_ids)
 
             if os.path.exists(manifest_path):
                 with open(manifest_path) as f:
@@ -91,6 +95,9 @@ def get_lesion_level_splits(data_cfg, save_dir=None):
                 expected_count = cached_count  # pre-existing cache with no manifest — trust it once
 
             if cached_count == expected_count == len(meta):
+                train_df = meta[meta["image_id"].isin(cached_train_ids)].reset_index(drop=True)
+                val_df = meta[meta["image_id"].isin(cached_val_ids)].reset_index(drop=True)
+                test_df = meta[meta["image_id"].isin(cached_test_ids)].reset_index(drop=True)
                 print(f"Loading existing splits from {save_dir}")
                 return train_df, val_df, test_df
 
@@ -113,9 +120,9 @@ def get_lesion_level_splits(data_cfg, save_dir=None):
 
     if save_dir is not None:
         os.makedirs(save_dir, exist_ok=True)
-        train_df.to_csv(os.path.join(save_dir, "train.csv"), index=False)
-        val_df.to_csv(os.path.join(save_dir, "val.csv"), index=False)
-        test_df.to_csv(os.path.join(save_dir, "test.csv"), index=False)
+        train_df.drop(columns="filepath").to_csv(os.path.join(save_dir, "train.csv"), index=False)
+        val_df.drop(columns="filepath").to_csv(os.path.join(save_dir, "val.csv"), index=False)
+        test_df.drop(columns="filepath").to_csv(os.path.join(save_dir, "test.csv"), index=False)
         with open(os.path.join(save_dir, "manifest.json"), "w") as f:
             json.dump({"resolved_image_count": len(meta)}, f)
         print(f"Saved splits to {save_dir}")

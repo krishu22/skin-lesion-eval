@@ -7,7 +7,7 @@ from src.data.splits import get_lesion_level_splits
 
 cfg = load_config("configs/experiment.yaml")
 train_df, val_df, test_df = get_lesion_level_splits(
-    cfg["data"], save_dir="outputs/baseline_smoke_test/splits"
+    cfg["data"], save_dir=cfg["splits_dir"]
 )
 
 group_col = cfg["data"]["split"]["group_col"]

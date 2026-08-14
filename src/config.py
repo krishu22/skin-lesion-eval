@@ -18,7 +18,7 @@ def _load_yaml(path):
 
 
 def _validate_config(cfg):
-    required_keys = ["data", "model", "loss", "train", "run_name", "output_dir"]
+    required_keys = ["data", "model", "loss", "train", "run_name", "output_dir", "splits_dir"]
     for key in required_keys:
         if key not in cfg:
             raise ValueError(f"Config is missing required section: '{key}'")

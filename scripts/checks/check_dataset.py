@@ -10,7 +10,7 @@ from src.data.dataset import HAM10000Dataset
 cfg = load_config("configs/experiment.yaml")
 
 train_df, val_df, test_df = get_lesion_level_splits(
-    cfg["data"], save_dir="outputs/baseline_smoke_test/splits"
+    cfg["data"], save_dir=cfg["splits_dir"]
 )
 
 train_ds = HAM10000Dataset(train_df, build_train_transform(cfg["data"]))

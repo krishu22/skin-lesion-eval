@@ -15,7 +15,7 @@ from src.utils.logger import init_run, finish
 cfg = load_config("configs/experiment.yaml")
 
 train_df, val_df, test_df = get_lesion_level_splits(
-    cfg["data"], save_dir="outputs/baseline_smoke_test/splits"
+    cfg["data"], save_dir=cfg["splits_dir"]
 )
 
 test_ds = HAM10000Dataset(test_df, build_eval_transform(cfg["data"]))
