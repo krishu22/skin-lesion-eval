@@ -51,10 +51,7 @@ def _run_inference(model, loader, device):
     return np.array(all_probs), np.array(all_preds), np.array(all_labels)
 
 
-def evaluate_model(model, test_loader, device, checkpoint_path, classes, output_dir):
-    model.load_state_dict(torch.load(checkpoint_path, map_location=device))
-
-    all_probs, all_preds, all_labels = _run_inference(model, test_loader, device)
+def compute_metrics(all_probs, all_preds, all_labels, classes, output_dir=None, prefix="test"):
     num_classes = len(classes)
 
     bal_acc = balanced_accuracy_score(all_labels, all_preds)
@@ -80,7 +77,7 @@ def evaluate_model(model, test_loader, device, checkpoint_path, classes, output_
     brier = _brier_score(all_probs, all_labels, num_classes)
     ece = _expected_calibration_error(all_probs, all_preds, all_labels)
 
-    print("\n===== TEST SET RESULTS =====")
+    print(f"\n===== {prefix.upper()} SET RESULTS =====")
     print(f"Balanced Accuracy: {bal_acc:.4f}")
     print(f"Macro-F1: {macro_f1:.4f}")
     print(f"Macro-AUC: {macro_auc:.4f}")
@@ -101,19 +98,29 @@ def evaluate_model(model, test_loader, device, checkpoint_path, classes, output_
     cm_df = pd.DataFrame(cm, index=classes, columns=classes)
     print("\nConfusion matrix (rows=true, cols=predicted):\n", cm_df)
 
-    os.makedirs(output_dir, exist_ok=True)
-    per_class_df.to_csv(os.path.join(output_dir, "test_per_class_metrics.csv"), index=False)
-    cm_df.to_csv(os.path.join(output_dir, "test_confusion_matrix.csv"))
-
     summary = {
-        "test_balanced_accuracy": bal_acc,
-        "test_macro_f1": macro_f1,
-        "test_macro_auc": macro_auc,
-        "test_nll": nll,
-        "test_brier": brier,
-        "test_ece": ece,
+        f"{prefix}_balanced_accuracy": bal_acc,
+        f"{prefix}_macro_f1": macro_f1,
+        f"{prefix}_macro_auc": macro_auc,
+        f"{prefix}_nll": nll,
+        f"{prefix}_brier": brier,
+        f"{prefix}_ece": ece,
     }
-    pd.DataFrame([summary]).to_csv(os.path.join(output_dir, "test_summary.csv"), index=False)
+
+    if output_dir is not None:
+        os.makedirs(output_dir, exist_ok=True)
+        per_class_df.to_csv(os.path.join(output_dir, f"{prefix}_per_class_metrics.csv"), index=False)
+        cm_df.to_csv(os.path.join(output_dir, f"{prefix}_confusion_matrix.csv"))
+        pd.DataFrame([summary]).to_csv(os.path.join(output_dir, f"{prefix}_summary.csv"), index=False)
+
+    return summary
+
+
+def evaluate_model(model, test_loader, device, checkpoint_path, classes, output_dir):
+    model.load_state_dict(torch.load(checkpoint_path, map_location=device))
+
+    all_probs, all_preds, all_labels = _run_inference(model, test_loader, device)
+    summary = compute_metrics(all_probs, all_preds, all_labels, classes, output_dir=output_dir, prefix="test")
 
     log(summary)
 
