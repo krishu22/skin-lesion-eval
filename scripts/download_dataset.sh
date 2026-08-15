@@ -51,7 +51,9 @@ if ! python3 -m pip show kaggle >/dev/null 2>&1; then
     python3 -m pip install kaggle
 fi
 
-EXPECTED_CLASS_DIRS=(AK BCC BKL DF MEL NV SCC UNK VASC)
+# UNK has no image folder in this dataset (only appears as a metadata CSV
+# column, always zero) — don't require it on disk.
+EXPECTED_CLASS_DIRS=(AK BCC BKL DF MEL NV SCC VASC)
 
 _isic2019_present() {
     for cls in "${EXPECTED_CLASS_DIRS[@]}"; do
