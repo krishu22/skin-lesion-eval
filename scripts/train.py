@@ -7,7 +7,7 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 from src.config import load_config
 from src.utils.seed import set_seed
-from src.data.splits import get_lesion_level_splits
+from src.data.splits import get_lesion_level_splits, get_cv_fold
 from src.data.transforms import build_train_transform, build_eval_transform
 from src.data.dataset import HAM10000Dataset
 from src.models.build import build_model, get_device
@@ -34,9 +34,20 @@ def main():
 
     set_seed(cfg["train"]["seed"], deterministic=cfg["train"].get("deterministic", False))
 
-    train_df, val_df, test_df = get_lesion_level_splits(
-        cfg["data"], save_dir=cfg["splits_dir"]
-    )
+    cv_cfg = cfg.get("cv", {})
+    cv_enabled = cv_cfg.get("enabled", False)
+
+    if cv_enabled:
+        fold_index = cv_cfg["fold_index"]
+        train_df, val_df, test_df = get_cv_fold(
+            cfg["data"], cv_cfg, save_dir=cfg["splits_dir"]
+        )
+        cfg["run_name"] = f"{cfg['run_name']}_fold{fold_index}"
+        cfg["output_dir"] = f"{cfg['output_dir']}_fold{fold_index}"
+    else:
+        train_df, val_df, test_df = get_lesion_level_splits(
+            cfg["data"], save_dir=cfg["splits_dir"]
+        )
 
     train_transform = build_train_transform(cfg["data"])
     eval_transform = build_eval_transform(cfg["data"])
@@ -57,15 +68,24 @@ def main():
     class_counts = [int((train_df["label"] == c).sum()) for c in range(num_classes)]
     criterion = build_loss(cfg["loss"], class_counts=class_counts)
 
-    checkpoint_path = f"{cfg['output_dir']}/checkpoints/best.pt"
+    checkpoint_path = f"{cfg['output_dir']}/best_model.pth"
     metrics_dir = f"{cfg['output_dir']}/metrics"
+
+    checkpoint_meta = {
+        "loss_type": cfg["loss"]["name"],
+        "mixup_enabled": cfg["train"].get("mixup", {}).get("enabled", False),
+        "cutmix_enabled": cfg["train"].get("cutmix", {}).get("enabled", False),
+        "segmentation_enabled": cfg["data"].get("use_segmented", False),
+        "dullrazor_enabled": cfg["data"].get("dullrazor", False),
+    }
 
     init_run(cfg)
 
     metric_for_best = cfg["train"].get("metric_for_best", "balanced_accuracy")
     print(f"\nStarting training on device: {device}\n")
     best_metric = train_model(
-        model, train_loader, val_loader, criterion, cfg["train"], device, checkpoint_path
+        model, train_loader, val_loader, criterion, cfg["train"], device, checkpoint_path,
+        checkpoint_meta=checkpoint_meta,
     )
     print(f"\nTraining complete. Best val {metric_for_best}: {best_metric:.4f}")
 
@@ -76,6 +96,13 @@ def main():
 
     finish()
     print("\nRun complete. Test summary:", test_summary)
+
+    if cv_enabled:
+        print(
+            f"[CV] fold={fold_index} "
+            f"test_balanced_accuracy={test_summary['test_balanced_accuracy']:.4f} "
+            f"test_macro_f1={test_summary['test_macro_f1']:.4f}"
+        )
 
 
 if __name__ == "__main__":

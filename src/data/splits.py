@@ -1,7 +1,7 @@
 import json
 import os
 import pandas as pd
-from sklearn.model_selection import GroupShuffleSplit
+from sklearn.model_selection import GroupShuffleSplit, StratifiedGroupKFold
 
 
 def _find_image_path(image_id, image_dirs):
@@ -128,3 +128,41 @@ def get_lesion_level_splits(data_cfg, save_dir=None):
         print(f"Saved splits to {save_dir}")
 
     return train_df, val_df, test_df
+
+
+def get_cv_fold(data_cfg, cv_cfg, save_dir=None):
+    """
+    Returns (train_df, val_df, test_df) for cv_cfg["fold_index"] of a stratified,
+    lesion-grouped k-fold split over the combined train+val pool. test_df is always
+    the same held-out test set produced by get_lesion_level_splits — CV never
+    touches it. The fold assignment (which lesions land in which of cv_cfg["n_folds"]
+    folds) is fully determined by cv_cfg["seed"], so every fold_index invocation sees
+    the same partition.
+    """
+    train_df, val_df, test_df = get_lesion_level_splits(data_cfg, save_dir=save_dir)
+
+    group_col = data_cfg["split"]["group_col"]
+    pool_df = pd.concat([train_df, val_df], ignore_index=True)
+
+    lesion_level = pool_df.drop_duplicates(subset=group_col)[[group_col, "label"]].reset_index(drop=True)
+
+    n_folds = cv_cfg["n_folds"]
+    fold_index = cv_cfg["fold_index"]
+    seed = cv_cfg["seed"]
+
+    skf = StratifiedGroupKFold(n_splits=n_folds, shuffle=True, random_state=seed)
+    folds = list(skf.split(lesion_level, lesion_level["label"], groups=lesion_level[group_col]))
+    train_lesion_idx, val_lesion_idx = folds[fold_index]
+
+    train_lesions = lesion_level.iloc[train_lesion_idx][group_col].values
+    val_lesions = lesion_level.iloc[val_lesion_idx][group_col].values
+
+    fold_train_df = pool_df[pool_df[group_col].isin(train_lesions)].reset_index(drop=True)
+    fold_val_df = pool_df[pool_df[group_col].isin(val_lesions)].reset_index(drop=True)
+
+    _assert_no_leakage(fold_train_df, fold_val_df, test_df, group_col)
+
+    print(f"[CV] fold={fold_index}/{n_folds} train lesions={len(train_lesions)} val lesions={len(val_lesions)}")
+    print(f"[CV] fold={fold_index}/{n_folds} train images={len(fold_train_df)} val images={len(fold_val_df)}")
+
+    return fold_train_df, fold_val_df, test_df

@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import torch
@@ -124,7 +125,7 @@ def run_epoch(model, loader, criterion, optimizer, device, train_mode, epoch_num
     return {"loss": avg_loss, "bal_acc": bal_acc, "macro_f1": macro_f1}
 
 
-def train_model(model, train_loader, val_loader, criterion, train_cfg, device, checkpoint_path):
+def train_model(model, train_loader, val_loader, criterion, train_cfg, device, checkpoint_path, checkpoint_meta=None):
     max_epochs = train_cfg["max_epochs"]
     patience = train_cfg["patience"]
 
@@ -176,6 +177,15 @@ def train_model(model, train_loader, val_loader, criterion, train_cfg, device, c
             best_metric = val_metric
             epochs_no_improve = 0
             torch.save(model.state_dict(), checkpoint_path)
+            meta = {
+                **(checkpoint_meta or {}),
+                "epoch": epoch,
+                "val_balanced_accuracy": val_metrics["bal_acc"],
+                "val_macro_f1": val_metrics["macro_f1"],
+            }
+            meta_path = os.path.join(os.path.dirname(checkpoint_path), "best_model_meta.json")
+            with open(meta_path, "w") as f:
+                json.dump(meta, f, indent=2)
             print(f"  -> New best val {metric_for_best}: {best_metric:.4f} (checkpoint saved)")
         else:
             epochs_no_improve += 1

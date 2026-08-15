@@ -12,6 +12,14 @@ output_dir: outputs/baseline
 # reloaded from cache on every subsequent run.
 splits_dir: outputs/splits
 
+# Stratified (lesion-grouped) k-fold CV, off by default. When enabled, one
+# invocation trains/evaluates exactly cv.fold_index — run once per fold.
+cv:
+  enabled: false
+  n_folds: 5
+  fold_index: 0
+  seed: 42
+
 wandb:
   project: ham10000
   tags: []

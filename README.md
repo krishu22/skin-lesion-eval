@@ -50,8 +50,10 @@ data is already present.
 python3 scripts/train.py --config configs/experiment.yaml [overrides...]
 ```
 
-This single command trains, saves the best checkpoint to `<output_dir>/checkpoints/best.pt`,
-then runs final evaluation on the test set and writes metrics CSVs to `<output_dir>/metrics/`.
+This single command trains, saves the best checkpoint to `<output_dir>/best_model.pth` (plus a
+`<output_dir>/best_model_meta.json` sidecar recording the epoch, val metrics, and which
+loss/mixup/cutmix/segmentation/dullrazor options produced it), then runs final evaluation on the
+test set and writes metrics CSVs to `<output_dir>/metrics/`.
 `configs/experiment.yaml` is the one base config; everything variable is passed as a trailing
 `key=value` (or `key.subkey=value`) override — no need to edit YAML, commit, or push to try a
 different combination on a RunPod terminal.
@@ -74,6 +76,10 @@ different combination on a RunPod terminal.
 | `run_name=` | string | **set this every run** — used for W&B run naming |
 | `output_dir=` | path | **set this every run** — where checkpoints/metrics are written |
 | `splits_dir=` | path | shared lesion-level train/val/test split cache (see below); leave at its default unless you deliberately want a different split |
+| `cv.enabled=` | `true` \| `false` | run stratified k-fold CV instead of the fixed train/val split (test stays untouched) |
+| `cv.n_folds=` | int | number of CV folds |
+| `cv.fold_index=` | int | which fold this invocation trains/evaluates (0-indexed); run once per fold |
+| `cv.seed=` | int | seed for the fold assignment (fixed regardless of `fold_index`, so all 5 invocations see the same partition) |
 
 At most one of MixUp/CutMix is ever applied to a given batch even if both are enabled;
 `batch_prob` is each one's share of batches.
@@ -151,6 +157,36 @@ python3 scripts/train.py --config configs/experiment.yaml \
    macro-AUC, NLL, Brier score, ECE; writes CSVs to `<output_dir>/metrics/`.
 
 Logging is via Weights & Biases (`src/utils/logger.py`); there is no separate local log file.
+
+### Cross-validation
+
+Set `cv.enabled=true` to run stratified (lesion-grouped) k-fold CV instead of the fixed
+train/val split. The test set is always the same held-out set used by normal runs — CV only
+re-splits the combined train+val pool. One invocation trains and evaluates exactly one fold
+(`cv.fold_index`); run it once per fold (0 through `cv.n_folds - 1`) to collect all folds' test
+metrics. Each fold's checkpoint is written to `<output_dir>_fold<N>/best_model.pth`, and the
+final line printed is `[CV] fold=<N> test_balanced_accuracy=... test_macro_f1=...` for easy
+collection across runs.
+
+```bash
+python3 scripts/train.py --config configs/experiment.yaml \
+    cv.enabled=true cv.fold_index=0 run_name=raw_ce output_dir=outputs/raw_ce
+```
+
+### Test-time augmentation and significance testing
+
+`scripts/run_tta.py` re-evaluates a trained checkpoint on the test set with 8 test-time
+augmentation views (flips/rotations/color-jitter), averaging softmax probabilities before
+scoring — eval-only, does not touch training:
+```bash
+python3 scripts/run_tta.py --checkpoint outputs/raw_ce/best_model.pth --config configs/experiment.yaml
+```
+
+`scripts/significance_test.py` runs a paired t-test and a Wilcoxon signed-rank test between two
+configs' 5 per-fold test balanced-accuracy values:
+```bash
+python3 scripts/significance_test.py --a 0.70 0.71 0.69 0.72 0.70 --b 0.75 0.74 0.76 0.77 0.73
+```
 
 ## Manual smoke-test scripts
 

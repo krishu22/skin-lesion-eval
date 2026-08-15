@@ -38,6 +38,15 @@ def _validate_config(cfg):
             f"train.metric_for_best='{metric}' is not one of {valid_metrics}"
         )
 
+    cv_cfg = cfg.get("cv", {})
+    if cv_cfg.get("enabled", False):
+        n_folds = cv_cfg["n_folds"]
+        fold_index = cv_cfg["fold_index"]
+        if not (0 <= fold_index < n_folds):
+            raise ValueError(
+                f"cv.fold_index={fold_index} must be in [0, cv.n_folds={n_folds})"
+            )
+
 
 def _split_overrides(overrides):
     """Split CLI overrides into (category switches, dotlist overrides).
