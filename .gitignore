@@ -8,9 +8,3 @@ kaggle.json
 __pycache__/
 *.pyc
 .DS_Store
-
-# Per-run artifacts (checkpoints/metrics) are ephemeral and shouldn't be
-# committed — but outputs/splits/ is the shared lesion-level split cache
-# every ablation reuses, so it's tracked deliberately.
-outputs/*
-!outputs/splits/
