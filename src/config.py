@@ -9,7 +9,10 @@ CATEGORY_TO_FOLDER = {
     "model": "configs/model",
     "loss": "configs/loss",
     "train": "configs/train",
+    "metadata": "configs/metadata",
 }
+
+VALID_FUSION_TYPES = {"concatenation", "hadamard", "self_cross_attention"}
 
 
 def _load_yaml(path):
@@ -45,6 +48,14 @@ def _validate_config(cfg):
         if not (0 <= fold_index < n_folds):
             raise ValueError(
                 f"cv.fold_index={fold_index} must be in [0, cv.n_folds={n_folds})"
+            )
+
+    metadata_cfg = cfg.get("metadata", {})
+    if metadata_cfg.get("use_metadata", False):
+        fusion_type = metadata_cfg.get("fusion_type")
+        if fusion_type not in VALID_FUSION_TYPES:
+            raise ValueError(
+                f"metadata.fusion_type='{fusion_type}' is not one of {VALID_FUSION_TYPES}"
             )
 
 

@@ -1,4 +1,5 @@
 import argparse
+import pandas as pd
 from torch.utils.data import DataLoader
 
 import sys
@@ -10,6 +11,7 @@ from src.utils.seed import set_seed
 from src.data.splits import get_lesion_level_splits, get_cv_fold
 from src.data.transforms import build_train_transform, build_eval_transform
 from src.data.dataset import HAM10000Dataset
+from src.data.metadata import load_metadata_features
 from src.models.build import build_model, get_device
 from src.losses.build import build_loss
 from src.engine.trainer import train_model
@@ -52,16 +54,34 @@ def main():
     train_transform = build_train_transform(cfg["data"])
     eval_transform = build_eval_transform(cfg["data"])
 
-    train_ds = HAM10000Dataset(train_df, train_transform)
-    val_ds = HAM10000Dataset(val_df, eval_transform)
-    test_ds = HAM10000Dataset(test_df, eval_transform)
+    metadata_cfg = cfg.get("metadata", {})
+    use_metadata = metadata_cfg.get("use_metadata", False)
+
+    if use_metadata:
+        if cv_enabled:
+            # A CV fold's train/val split can draw lesions from either the
+            # original train or val pool, so the metadata lookup must cover both.
+            train_meta = val_meta = pd.concat([
+                load_metadata_features("train", cfg["splits_dir"]),
+                load_metadata_features("val", cfg["splits_dir"]),
+            ])
+        else:
+            train_meta = load_metadata_features("train", cfg["splits_dir"])
+            val_meta = load_metadata_features("val", cfg["splits_dir"])
+        test_meta = load_metadata_features("test", cfg["splits_dir"])
+    else:
+        train_meta = val_meta = test_meta = None
+
+    train_ds = HAM10000Dataset(train_df, train_transform, metadata_df=train_meta)
+    val_ds = HAM10000Dataset(val_df, eval_transform, metadata_df=val_meta)
+    test_ds = HAM10000Dataset(test_df, eval_transform, metadata_df=test_meta)
 
     batch_size = cfg["train"]["batch_size"]
     train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True)
     val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False, num_workers=4, pin_memory=True)
     test_loader = DataLoader(test_ds, batch_size=batch_size, shuffle=False, num_workers=4, pin_memory=True)
 
-    model = build_model(cfg["model"])
+    model = build_model(cfg["model"], metadata_cfg=metadata_cfg)
     device = get_device()
 
     num_classes = cfg["model"]["num_classes"]
@@ -77,6 +97,8 @@ def main():
         "cutmix_enabled": cfg["train"].get("cutmix", {}).get("enabled", False),
         "segmentation_enabled": cfg["data"].get("use_segmented", False),
         "dullrazor_enabled": cfg["data"].get("dullrazor", False),
+        "use_metadata": use_metadata,
+        "fusion_type": metadata_cfg.get("fusion_type") if use_metadata else None,
     }
 
     init_run(cfg)
@@ -85,13 +107,14 @@ def main():
     print(f"\nStarting training on device: {device}\n")
     best_metric = train_model(
         model, train_loader, val_loader, criterion, cfg["train"], device, checkpoint_path,
-        checkpoint_meta=checkpoint_meta,
+        checkpoint_meta=checkpoint_meta, use_metadata=use_metadata,
     )
     print(f"\nTraining complete. Best val {metric_for_best}: {best_metric:.4f}")
 
     print("\nRunning final evaluation on test set...\n")
     test_summary = evaluate_model(
-        model, test_loader, device, checkpoint_path, cfg["data"]["classes"], metrics_dir
+        model, test_loader, device, checkpoint_path, cfg["data"]["classes"], metrics_dir,
+        use_metadata=use_metadata,
     )
 
     finish()
