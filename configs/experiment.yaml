@@ -3,6 +3,10 @@ defaults:
   model: swin
   loss: ce
   train: default
+  # Image-only by default. Override with metadata=concatenation,
+  # metadata=hadamard, or metadata=self_cross_attention to fuse in the
+  # per-image age/sex/localization metadata features.
+  metadata: none
 
 run_name: baseline
 output_dir: outputs/baseline

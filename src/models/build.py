@@ -1,6 +1,8 @@
 import torch
 import timm
 
+from src.models.multimodal import MultimodalLesionClassifier
+
 
 def get_device():
     return torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -20,14 +22,20 @@ def _inject_dropout_head(model, dropout_p):
     return model
 
 
-def build_model(model_cfg):
-    model = timm.create_model(
-        model_cfg["name"],
-        pretrained=model_cfg["pretrained"],
-        num_classes=model_cfg["num_classes"],
-        drop_path_rate=model_cfg.get("drop_path_rate", 0.0),
-    )
-    model = _inject_dropout_head(model, model_cfg.get("dropout", 0.0))
+def build_model(model_cfg, metadata_cfg=None):
+    use_metadata = bool(metadata_cfg and metadata_cfg.get("use_metadata", False))
+
+    if use_metadata:
+        model = MultimodalLesionClassifier(model_cfg, metadata_cfg["fusion_type"])
+    else:
+        model = timm.create_model(
+            model_cfg["name"],
+            pretrained=model_cfg["pretrained"],
+            num_classes=model_cfg["num_classes"],
+            drop_path_rate=model_cfg.get("drop_path_rate", 0.0),
+        )
+        model = _inject_dropout_head(model, model_cfg.get("dropout", 0.0))
+
     device = get_device()
     model = model.to(device)
     return model

@@ -12,6 +12,7 @@ from src.config import load_config
 from src.data.splits import get_lesion_level_splits
 from src.data.dataset import HAM10000Dataset
 from src.data.hair_removal import DullRazor
+from src.data.metadata import load_metadata_features
 from src.models.build import build_model, get_device
 from src.engine.evaluator import _run_inference, compute_metrics
 
@@ -74,8 +75,12 @@ def main():
 
     _, _, test_df = get_lesion_level_splits(cfg["data"], save_dir=cfg["splits_dir"])
 
+    metadata_cfg = cfg.get("metadata", {})
+    use_metadata = metadata_cfg.get("use_metadata", False)
+    test_meta = load_metadata_features("test", cfg["splits_dir"]) if use_metadata else None
+
     device = get_device()
-    model = build_model(cfg["model"])
+    model = build_model(cfg["model"], metadata_cfg=metadata_cfg)
     model.load_state_dict(torch.load(checkpoint_path, map_location=device))
     model.eval()
 
@@ -87,10 +92,10 @@ def main():
     for name, extra_ops in TTA_VARIANTS:
         transform = _build_tta_transform(cfg["data"], extra_ops)
         loader = DataLoader(
-            HAM10000Dataset(test_df, transform),
+            HAM10000Dataset(test_df, transform, metadata_df=test_meta),
             batch_size=batch_size, shuffle=False, num_workers=4, pin_memory=True,
         )
-        probs, _, labels = _run_inference(model, loader, device)
+        probs, _, labels = _run_inference(model, loader, device, use_metadata=use_metadata)
         variant_probs.append(probs)
         if all_labels is None:
             all_labels = labels

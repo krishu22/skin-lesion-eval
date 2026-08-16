@@ -34,13 +34,19 @@ def _brier_score(probs, labels, num_classes):
 
 
 @torch.no_grad()
-def _run_inference(model, loader, device):
+def _run_inference(model, loader, device, use_metadata=False):
     model.eval()
     all_probs, all_preds, all_labels = [], [], []
 
-    for imgs, labels in loader:
-        imgs = imgs.to(device)
-        outputs = model(imgs)
+    for batch in loader:
+        if use_metadata:
+            imgs, metadata, labels = batch
+            imgs, metadata = imgs.to(device), metadata.to(device)
+            outputs = model(imgs, metadata)
+        else:
+            imgs, labels = batch
+            imgs = imgs.to(device)
+            outputs = model(imgs)
         probs = torch.softmax(outputs, dim=1).cpu().numpy()
         preds = probs.argmax(axis=1)
 
@@ -116,10 +122,10 @@ def compute_metrics(all_probs, all_preds, all_labels, classes, output_dir=None, 
     return summary
 
 
-def evaluate_model(model, test_loader, device, checkpoint_path, classes, output_dir):
+def evaluate_model(model, test_loader, device, checkpoint_path, classes, output_dir, use_metadata=False):
     model.load_state_dict(torch.load(checkpoint_path, map_location=device))
 
-    all_probs, all_preds, all_labels = _run_inference(model, test_loader, device)
+    all_probs, all_preds, all_labels = _run_inference(model, test_loader, device, use_metadata=use_metadata)
     summary = compute_metrics(all_probs, all_preds, all_labels, classes, output_dir=output_dir, prefix="test")
 
     log(summary)

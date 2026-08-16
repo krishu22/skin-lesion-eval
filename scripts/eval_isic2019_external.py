@@ -38,6 +38,7 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 from src.config import load_config
 from src.data.dataset import HAM10000Dataset
+from src.data.metadata import load_metadata_features_from_path
 from src.models.build import build_model, get_device
 from src.engine.evaluator import _run_inference, compute_metrics
 from scripts.run_tta import TTA_VARIANTS, _build_tta_transform
@@ -57,6 +58,11 @@ def parse_args():
              "as populated by `bash scripts/download_dataset.sh isic2019`)",
     )
     parser.add_argument(
+        "--metadata-csv", type=str, default="outputs/isic2019_external_val_with_metadata.csv",
+        help="Only used when the checkpoint's config has metadata.use_metadata=true. Must have "
+             "the same 13 feature columns as outputs/splits/{train,val,test}.csv, keyed by image_id.",
+    )
+    parser.add_argument(
         "overrides",
         nargs="*",
         help="Same data/loss/model overrides used to train the checkpoint, e.g. data=ham10000_segmented",
@@ -74,8 +80,32 @@ def main():
     data_root = Path(args.data_root)
     df["filepath"] = df["filepath"].apply(lambda p: str(data_root / p))
 
+    metadata_cfg = cfg.get("metadata", {})
+    use_metadata = metadata_cfg.get("use_metadata", False)
+
+    isic_meta = None
+    if use_metadata:
+        metadata_csv_path = Path(args.metadata_csv)
+        if not metadata_csv_path.exists():
+            raise RuntimeError(
+                f"cfg.metadata.use_metadata=true (fusion_type={metadata_cfg.get('fusion_type')}), "
+                f"but no ISIC2019 metadata feature CSV was found at '{metadata_csv_path}'. This "
+                "repo does not currently have an ISIC2019 equivalent of the HAM10000 age/sex/"
+                "localization metadata: ISIC_metadata/ only contains the diagnosis ground-truth "
+                "CSV (ISIC_2019_Training_GroundTruth.csv), not a per-image metadata CSV "
+                "(ISIC_2019_Training_Metadata.csv, with age_approx/sex/anatom_site_general), and "
+                "there is no script analogous to scripts/add_metadata_features.py to derive the "
+                "13 feature columns for it. To evaluate this metadata-enabled checkpoint on "
+                "ISIC2019, either (a) obtain ISIC2019's per-image age/sex/anatomical-site "
+                f"metadata and build '{metadata_csv_path}' with the same columns as "
+                "outputs/splits/{train,val,test}.csv (keyed by image_id), or (b) re-run this "
+                "checkpoint's training with metadata=none if you need an image-only checkpoint "
+                "to evaluate here instead."
+            )
+        isic_meta = load_metadata_features_from_path(metadata_csv_path)
+
     device = get_device()
-    model = build_model(cfg["model"])
+    model = build_model(cfg["model"], metadata_cfg=metadata_cfg)
     model.load_state_dict(torch.load(args.checkpoint, map_location=device))
     model.eval()
 
@@ -87,10 +117,10 @@ def main():
     for name, extra_ops in TTA_VARIANTS:
         transform = _build_tta_transform(cfg["data"], extra_ops)
         loader = DataLoader(
-            HAM10000Dataset(df, transform),
+            HAM10000Dataset(df, transform, metadata_df=isic_meta),
             batch_size=batch_size, shuffle=False, num_workers=4, pin_memory=True,
         )
-        probs, _, labels = _run_inference(model, loader, device)
+        probs, _, labels = _run_inference(model, loader, device, use_metadata=use_metadata)
         variant_probs.append(probs)
         if all_labels is None:
             all_labels = labels

@@ -74,7 +74,7 @@ def build_scheduler(optimizer, scheduler_cfg, steps_per_epoch=None, max_epochs=N
 
 
 def run_epoch(model, loader, criterion, optimizer, device, train_mode, epoch_num,
-              mixup_cfg=None, cutmix_cfg=None):
+              mixup_cfg=None, cutmix_cfg=None, use_metadata=False):
     model.train() if train_mode else model.eval()
     total_loss = 0.0
     all_preds, all_labels = [], []
@@ -83,11 +83,19 @@ def run_epoch(model, loader, criterion, optimizer, device, train_mode, epoch_num
     pbar = tqdm(loader, desc=desc, leave=False)
 
     with torch.set_grad_enabled(train_mode):
-        for batch_idx, (imgs, labels) in enumerate(pbar):
+        for batch_idx, batch in enumerate(pbar):
+            if use_metadata:
+                imgs, metadata, labels = batch
+                metadata = metadata.to(device)
+            else:
+                imgs, labels = batch
+                metadata = None
             imgs, labels = imgs.to(device), labels.to(device)
 
             if train_mode:
                 optimizer.zero_grad()
+                # MixUp/CutMix only ever touch imgs/labels — metadata for a mixed
+                # sample stays whichever image was left unpermuted (targets_a's).
                 imgs, targets_a, targets_b, lam, aug_mode = apply_batch_augmentation(
                     imgs, labels, mixup_cfg, cutmix_cfg, device
                 )
@@ -98,7 +106,7 @@ def run_epoch(model, loader, criterion, optimizer, device, train_mode, epoch_num
             else:
                 targets_a, targets_b, lam = labels, labels, 1.0
 
-            outputs = model(imgs)
+            outputs = model(imgs, metadata) if use_metadata else model(imgs)
             loss = mixup_cutmix_criterion(criterion, outputs, targets_a, targets_b, lam)
 
             if train_mode:
@@ -125,7 +133,8 @@ def run_epoch(model, loader, criterion, optimizer, device, train_mode, epoch_num
     return {"loss": avg_loss, "bal_acc": bal_acc, "macro_f1": macro_f1}
 
 
-def train_model(model, train_loader, val_loader, criterion, train_cfg, device, checkpoint_path, checkpoint_meta=None):
+def train_model(model, train_loader, val_loader, criterion, train_cfg, device, checkpoint_path,
+                 checkpoint_meta=None, use_metadata=False):
     max_epochs = train_cfg["max_epochs"]
     patience = train_cfg["patience"]
 
@@ -149,10 +158,11 @@ def train_model(model, train_loader, val_loader, criterion, train_cfg, device, c
     for epoch in range(1, max_epochs + 1):
         train_metrics = run_epoch(
             model, train_loader, criterion, optimizer, device, train_mode=True, epoch_num=epoch,
-            mixup_cfg=mixup_cfg, cutmix_cfg=cutmix_cfg,
+            mixup_cfg=mixup_cfg, cutmix_cfg=cutmix_cfg, use_metadata=use_metadata,
         )
         val_metrics = run_epoch(
-            model, val_loader, criterion, optimizer, device, train_mode=False, epoch_num=epoch
+            model, val_loader, criterion, optimizer, device, train_mode=False, epoch_num=epoch,
+            use_metadata=use_metadata,
         )
         scheduler.step()
 
