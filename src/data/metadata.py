@@ -20,12 +20,16 @@ METADATA_FEATURE_COLUMNS = [
 ]
 
 
-def load_metadata_features_from_path(path):
-    """Loads the 13-dim metadata feature columns from an arbitrary CSV, indexed by image_id.
+def load_metadata_features_from_path(path, id_column="image_id"):
+    """Loads the 13-dim metadata feature columns from an arbitrary CSV, indexed by id_column.
 
-    Returns only METADATA_FEATURE_COLUMNS, indexed by image_id so callers can
+    Returns only METADATA_FEATURE_COLUMNS, indexed by id_column so callers can
     look up the right row per image rather than relying on row order matching
-    another dataframe.
+    another dataframe. id_column defaults to "image_id" (HAM10000 splits);
+    pass id_column="image" for outputs/isic2019_metadata.csv, which uses that
+    name instead. Columns are always reindexed to METADATA_FEATURE_COLUMNS,
+    so the returned column order is identical regardless of the source CSV's
+    column order.
     """
     df = pd.read_csv(path)
 
@@ -33,11 +37,11 @@ def load_metadata_features_from_path(path):
     if missing_cols:
         raise ValueError(f"{path} is missing expected metadata columns: {missing_cols}")
 
-    if df["image_id"].duplicated().any():
-        dupes = df.loc[df["image_id"].duplicated(), "image_id"].tolist()
-        raise ValueError(f"{path} has duplicate image_id values: {dupes[:5]}")
+    if df[id_column].duplicated().any():
+        dupes = df.loc[df[id_column].duplicated(), id_column].tolist()
+        raise ValueError(f"{path} has duplicate {id_column} values: {dupes[:5]}")
 
-    return df.set_index("image_id")[METADATA_FEATURE_COLUMNS]
+    return df.set_index(id_column)[METADATA_FEATURE_COLUMNS]
 
 
 def load_metadata_features(split_name, splits_dir):

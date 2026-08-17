@@ -24,6 +24,13 @@ cv:
   fold_index: 0
   seed: 42
 
+# Off by default. Override with tta.enabled=true (e.g. on
+# scripts/eval_isic2019_external.py) to average predictions over the same
+# 8 TTA_VARIANTS/averaging used by scripts/run_tta.py on HAM10000 val,
+# instead of a single center-cropped pass.
+tta:
+  enabled: false
+
 wandb:
   project: ham10000
   tags: []
