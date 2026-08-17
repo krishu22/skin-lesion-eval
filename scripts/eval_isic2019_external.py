@@ -1,11 +1,25 @@
 """
 One-time external validation: evaluate an already-trained HAM10000
 checkpoint on the ISIC2019 external set prepared by
-scripts/prepare_isic2019_external_val.py (outputs/isic2019_external_val.csv).
+scripts/prepare_isic2019_external_val.py and
+scripts/merge_isic2019_metadata_features.py (outputs/isic2019_metadata.csv
+— image_id, filepath, label, and the 13 metadata feature columns, all in
+one file).
 
-Pure inference — no training, no tuning on the result. Reuses the exact
-TTA variants/transforms from scripts/run_tta.py and the same metric suite
-as the HAM10000 test-set evaluation (src/engine/evaluator.py).
+Pure inference — no training, no tuning on the result. TTA is off by
+default (single center-cropped pass, via the same build_eval_transform
+used for the HAM10000 test set); pass tta.enabled=true to instead average
+over the exact same 8 TTA_VARIANTS/transforms/averaging locked in on
+HAM10000 val by scripts/run_tta.py — this script does not retune or add
+ISIC2019-specific augmentations. Metrics use the same suite as the
+HAM10000 test-set evaluation (src/engine/evaluator.py).
+
+When the checkpoint's config has metadata.use_metadata=true, TTA only
+augments the image side: a fresh HAM10000Dataset is built per TTA variant
+from the same (df, isic_meta) pair, so every variant looks up the same
+metadata row per image_id — the metadata vector for a given image is
+identical across all of its augmented copies, never duplicated or
+misaligned relative to the image batch.
 
 Safe to run multiple times in the same session with different
 --checkpoint values (e.g. one per ablation run) — each run's metrics are
@@ -23,6 +37,7 @@ Usage:
       --config configs/experiment.yaml \\
       --checkpoint outputs/<run_name>/best_model.pth \\
       [--data-root isic2019] \\
+      [tta.enabled=true] \\
       [data=ham10000_segmented ...same overrides used to train the checkpoint...]
 """
 
@@ -39,6 +54,7 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 from src.config import load_config
 from src.data.dataset import HAM10000Dataset
 from src.data.metadata import load_metadata_features_from_path
+from src.data.transforms import build_eval_transform
 from src.models.build import build_model, get_device
 from src.engine.evaluator import _run_inference, compute_metrics
 from scripts.run_tta import TTA_VARIANTS, _build_tta_transform
@@ -49,18 +65,15 @@ def parse_args():
     parser.add_argument("--config", type=str, required=True, help="Path to top-level yaml config")
     parser.add_argument("--checkpoint", type=str, required=True, help="Path to a saved best_model.pth")
     parser.add_argument(
-        "--csv", type=str, default="outputs/isic2019_external_val.csv",
-        help="External val CSV with columns image_id, filepath, label",
+        "--csv", type=str, default="outputs/isic2019_metadata.csv",
+        help="External val CSV with columns image_id, filepath, label, and (when the "
+             "checkpoint's config has metadata.use_metadata=true) the same 13 feature "
+             "columns as outputs/splits/{train,val,test}.csv.",
     )
     parser.add_argument(
         "--data-root", type=str, default="isic2019",
         help="Directory the CSV's filepath column is relative to (the ISIC2019 dataset root, "
              "as populated by `bash scripts/download_dataset.sh isic2019`)",
-    )
-    parser.add_argument(
-        "--metadata-csv", type=str, default="outputs/isic2019_external_val_with_metadata.csv",
-        help="Only used when the checkpoint's config has metadata.use_metadata=true. Must have "
-             "the same 13 feature columns as outputs/splits/{train,val,test}.csv, keyed by image_id.",
     )
     parser.add_argument(
         "overrides",
@@ -85,24 +98,18 @@ def main():
 
     isic_meta = None
     if use_metadata:
-        metadata_csv_path = Path(args.metadata_csv)
-        if not metadata_csv_path.exists():
+        csv_path = Path(args.csv)
+        try:
+            isic_meta = load_metadata_features_from_path(csv_path, id_column="image_id")
+        except ValueError as e:
             raise RuntimeError(
                 f"cfg.metadata.use_metadata=true (fusion_type={metadata_cfg.get('fusion_type')}), "
-                f"but no ISIC2019 metadata feature CSV was found at '{metadata_csv_path}'. This "
-                "repo does not currently have an ISIC2019 equivalent of the HAM10000 age/sex/"
-                "localization metadata: ISIC_metadata/ only contains the diagnosis ground-truth "
-                "CSV (ISIC_2019_Training_GroundTruth.csv), not a per-image metadata CSV "
-                "(ISIC_2019_Training_Metadata.csv, with age_approx/sex/anatom_site_general), and "
-                "there is no script analogous to scripts/add_metadata_features.py to derive the "
-                "13 feature columns for it. To evaluate this metadata-enabled checkpoint on "
-                "ISIC2019, either (a) obtain ISIC2019's per-image age/sex/anatomical-site "
-                f"metadata and build '{metadata_csv_path}' with the same columns as "
-                "outputs/splits/{train,val,test}.csv (keyed by image_id), or (b) re-run this "
-                "checkpoint's training with metadata=none if you need an image-only checkpoint "
-                "to evaluate here instead."
-            )
-        isic_meta = load_metadata_features_from_path(metadata_csv_path)
+                f"but '{csv_path}' doesn't have the expected metadata columns ({e}). Build it "
+                "with scripts/add_isic2019_metadata_features.py / "
+                "scripts/merge_isic2019_metadata_features.py, or re-run this checkpoint's "
+                "training with metadata=none if you need an image-only checkpoint to evaluate "
+                "here instead."
+            ) from e
 
     device = get_device()
     model = build_model(cfg["model"], metadata_cfg=metadata_cfg)
@@ -112,10 +119,14 @@ def main():
     batch_size = cfg["train"]["batch_size"]
     classes = cfg["data"]["classes"]
 
+    tta_cfg = cfg.get("tta", {})
+    use_tta = tta_cfg.get("enabled", False)
+    variants = TTA_VARIANTS if use_tta else [("center_crop", None)]
+
     variant_probs = []
     all_labels = None
-    for name, extra_ops in TTA_VARIANTS:
-        transform = _build_tta_transform(cfg["data"], extra_ops)
+    for name, extra_ops in variants:
+        transform = _build_tta_transform(cfg["data"], extra_ops) if use_tta else build_eval_transform(cfg["data"])
         loader = DataLoader(
             HAM10000Dataset(df, transform, metadata_df=isic_meta),
             batch_size=batch_size, shuffle=False, num_workers=4, pin_memory=True,
@@ -124,7 +135,7 @@ def main():
         variant_probs.append(probs)
         if all_labels is None:
             all_labels = labels
-        print(f"[TTA] variant={name} done ({len(probs)} images)")
+        print(f"[{'TTA' if use_tta else 'single-pass'}] variant={name} done ({len(probs)} images)")
 
     avg_probs = np.mean(variant_probs, axis=0)
     tta_preds = avg_probs.argmax(axis=1)
@@ -135,7 +146,7 @@ def main():
         avg_probs, tta_preds, all_labels, classes,
         output_dir=output_dir, prefix="isic2019_external",
     )
-    print("\nISIC2019 external validation complete. Summary:", summary)
+    print(f"\nISIC2019 external validation complete (tta.enabled={use_tta}). Summary:", summary)
 
 
 if __name__ == "__main__":

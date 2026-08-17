@@ -9,6 +9,13 @@ Does NOT touch any training/model code or HAM10000 data. Read-only against
 existing HAM10000 split CSVs and the ISIC2019 ground-truth CSV; writes a
 single new output CSV.
 
+This output is an intermediate build artifact, not the final file the eval
+pipeline reads: scripts/filter_isic2019_metadata.py,
+scripts/add_isic2019_metadata_features.py, and
+scripts/merge_isic2019_metadata_features.py (in that order) consume it and
+fold it together with the metadata feature columns into the single final
+outputs/isic2019_metadata.csv that scripts/eval_isic2019_external.py uses.
+
 Run once: python scripts/prepare_isic2019_external_val.py
 """
 
