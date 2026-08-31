@@ -58,6 +58,45 @@ test set and writes metrics CSVs to `<output_dir>/metrics/`.
 `key=value` (or `key.subkey=value`) override — no need to edit YAML, commit, or push to try a
 different combination on a RunPod terminal.
 
+### Metadata fusion
+
+Optional third input alongside images: age/sex/anatomical-site metadata, fused with the image
+embedding via a configurable fusion module (`concatenation`, `hadamard`, or
+`self_cross_attention`) before the final classifier head.
+
+**One-time prerequisite** (must run after Step 1's split cache exists, before any
+`metadata.use_metadata=true` run):
+
+```bash
+python3 scripts/add_metadata_features.py
+```
+
+This adds 13 engineered feature columns (`age_normalized`, `age_is_missing`, `sex_female`,
+`sex_male`, 9 `loc_*` one-hot columns) directly into `outputs/splits/{train,val,test}.csv` —
+the age median is computed from `train.csv` only and applied to val/test to avoid leakage.
+Safe to re-run; it overwrites the same columns rather than duplicating them. Skip this if you
+never plan to run a `metadata.use_metadata=true` config — the image-only pipeline doesn't
+need it.
+
+| Override | Values | Effect |
+|---|---|---|
+| `metadata.use_metadata=` | `true` \| `false` | enable image+metadata fusion (default `false`) |
+| `metadata.fusion_type=` | `concatenation` \| `hadamard` \| `self_cross_attention` | how image and metadata embeddings are combined |
+
+### Example
+
+```bash
+python3 scripts/train.py --config configs/experiment.yaml \
+    metadata.use_metadata=true metadata.fusion_type=hadamard \
+    run_name=raw_hadamard_ce output_dir=outputs/raw_hadamard_ce
+```
+
+Works with any `data=`/`loss=`/`train.mixup...` combination above — metadata fusion is an
+independent fourth axis. Note: MixUp/CutMix only ever mix/cut the **image**; a mixed sample's
+metadata vector is left as whichever image was "left unpermuted" (`targets_a`'s), not blended
+or swapped to match — worth keeping in mind if you combine `train.mixup.enabled=true` with
+`metadata.use_metadata=true`.
+
 ### Overridable keys
 
 | Override | Values | Effect |
@@ -147,7 +186,11 @@ python3 scripts/train.py --config configs/experiment.yaml \
    train/val/test). Cached under `splits_dir` (shared across every run — see above).
 3. **Transforms**: `src/data/transforms.py` — optional DullRazor, then RandomResizedCrop /
    flips / rotation / color jitter / random erasing (train only), then normalize.
-4. **Model**: `src/models/build.py` builds a `timm` model per `configs/model/swin.yaml`.
+4. **Model**: `src/models/build.py` builds either a plain `timm` model per `configs/model/swin.yaml`
+   (image-only), or, when `metadata.use_metadata=true`, a `MultimodalLesionClassifier`
+   (`src/models/multimodal.py`) — the same `timm` backbone with its head dropped, fused with a
+   metadata embedding (`src/models/metadata_extractor.py`) via the configured `fusion_type`
+   (`src/models/fusion.py`) before a final linear classifier head sized to match.
 5. **Loss**: `src/losses/build.py` dispatches on `loss.name`; class counts for
    `cb_focal`/`confusion_aware_ce`/`logit_adjusted_ce` are computed from the train split.
 6. **Training**: `scripts/train.py` → `src/engine/trainer.py` — AdamW, cosine or cosine-warm-restart
@@ -187,6 +230,62 @@ configs' 5 per-fold test balanced-accuracy values:
 ```bash
 python3 scripts/significance_test.py --a 0.70 0.71 0.69 0.72 0.70 --b 0.75 0.74 0.76 0.77 0.73
 ```
+
+### External validation (ISIC2019)
+
+Evaluates an already-trained HAM10000 checkpoint, unmodified, on a held-out external set built
+from ISIC2019 — a pure generalization check, not a second training set. No tuning happens
+against these results.
+
+**Step 1 — download:**
+```bash
+bash scripts/download_dataset.sh isic2019
+```
+Populates `./isic2019/` with one folder per class (`AK/`, `BCC/`, `BKL/`, `DF/`, `MEL/`, `NV/`,
+`VASC/`, plus the excluded `SCC/`, `UNK/`).
+
+**Step 2 — one-time prep chain** (run once, in this exact order; each script consumes the
+previous one's output):
+
+```bash
+python3 scripts/prepare_isic2019_external_val.py       # -> outputs/isic2019_external_val.csv
+python3 scripts/filter_isic2019_metadata.py             # -> outputs/isic2019_metadata_filtered.csv
+python3 scripts/add_isic2019_metadata_features.py       # -> outputs/isic2019_metadata_filtered_with_features.csv
+python3 scripts/merge_isic2019_metadata_features.py     # -> outputs/isic2019_metadata.csv  (final)
+```
+
+What each step does:
+- **`prepare_isic2019_external_val.py`** — selects eligible images: drops `SCC`/`UNK` classes
+  (no HAM10000 equivalent), drops any `image_id` already present in any HAM10000 split
+  (dedup — image-ID-level, not lesion-ID-level), maps the remaining ISIC classes to HAM10000
+  `dx` labels using the same class order as `configs/data/ham10000.yaml`.
+- **`filter_isic2019_metadata.py`** — subsets the full ISIC2019 metadata CSV down to just the
+  image IDs selected above.
+- **`add_isic2019_metadata_features.py`** — engineers the same 13 metadata feature columns as
+  the HAM10000 script, adapted to ISIC2019's raw column names (`age_approx`,
+  `anatom_site_general`) and vocabulary. Age median is computed from this file alone (no
+  train/val/test split exists on the external side). Only `lower extremity`/`upper extremity`
+  localization values map to their HAM10000-named columns; everything else falls into
+  `loc_other_site`.
+- **`merge_isic2019_metadata_features.py`** — merges image_id/filepath/label with the raw
+  fields and the 13 engineered columns into the single final `outputs/isic2019_metadata.csv`,
+  which is the only file the eval script below reads.
+
+**Step 3 — evaluate a checkpoint:**
+```bash
+python3 scripts/eval_isic2019_external.py \
+    --config configs/experiment.yaml \
+    --checkpoint outputs/raw_ce/best_model.pth \
+    [tta.enabled=true] \
+    [data=ham10000_segmented ...same overrides used to train the checkpoint...]
+```
+Pass the **same** `data=`/`metadata=`/other overrides used to train the checkpoint — this
+script does not retune or add ISIC2019-specific augmentation; `tta.enabled=true` reuses the
+exact same 8 TTA views locked in on HAM10000 val, applied image-side only (metadata stays
+fixed per image across all TTA variants). Metrics use the identical suite as HAM10000 test-set
+evaluation. Safe to run repeatedly with different `--checkpoint` values in one session — each
+run writes to its own `outputs/isic2019_external/<checkpoint_dir_name>/`, nothing is
+overwritten between runs.
 
 ## Manual smoke-test scripts
 
