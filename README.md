@@ -297,3 +297,13 @@ python3 scripts/checks/check_config.py
 ```
 
 `scripts/sanity_check_mixup_cutmix.py` unit-tests the MixUp/CutMix math directly.
+
+---
+
+## License
+
+The code and original materials in this repository are released under the MIT License.
+
+The original HAM10000 images, lesion segmentation masks, and ISIC 2019 images and metadata are provided by their respective sources and are not covered by this repository's MIT License. Their original licenses and attribution requirements remain applicable.
+
+The custom processed HAM10000 dataset was created using the original HAM10000 images and corresponding lesion segmentation masks. It is provided as part of this research work and remains subject to the terms of its underlying source datasets.
