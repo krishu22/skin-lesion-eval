@@ -16,6 +16,10 @@ The pipeline is split into three independent axes that compose freely:
 Any combination of the above is a single command with no code or YAML edits required — see
 "Running ablations" below.
 
+📄 **Associated paper:**  
+K. Garg, *Beyond Internal Performance: Evaluating Loss, Augmentation, Fusion, and Generalization in Skin Lesion Classification*, Zenodo, 2026.  
+[Read the paper](https://doi.org/10.5281/zenodo.22236181)
+
 ## Setup
 
 ```bash
@@ -297,6 +301,24 @@ python3 scripts/checks/check_config.py
 ```
 
 `scripts/sanity_check_mixup_cutmix.py` unit-tests the MixUp/CutMix math directly.
+
+---
+
+## Citation
+
+If you use this repository, implementation, or results, please cite the associated paper:
+
+```bibtex
+@misc{garg2026beyondinternal,
+  author    = {Garg, Krisha},
+  title     = {Beyond Internal Performance: Evaluating Loss, Augmentation, Fusion, and Generalization in Skin Lesion Classification},
+  year      = {2026},
+  month     = sep,
+  publisher = {Zenodo},
+  doi       = {10.5281/zenodo.22236181},
+  url       = {https://doi.org/10.5281/zenodo.22236181}
+}
+```
 
 ---
 
