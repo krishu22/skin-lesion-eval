@@ -12,7 +12,7 @@ CATEGORY_TO_FOLDER = {
     "metadata": "configs/metadata",
 }
 
-VALID_FUSION_TYPES = {"concatenation", "hadamard", "self_cross_attention"}
+VALID_FUSION_TYPES = {"concatenation", "hadamard", "attention"}
 
 
 def _load_yaml(path):
